@@ -65,23 +65,14 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
     passing.set(key, p);
   }
 
-  // Transit-map casing: every line is first stroked wider in the row background, so where two lines cross the
-  // later one visibly passes over the earlier one instead of the colours smearing together.
+  // Transit-map casing: each line is first stroked wider in the row background, so where two lines cross one
+  // visibly passes over the other. Paint order is by colour index, not by row role: both halves of an edge share
+  // its colour, so the same line stays on top on both sides of a row boundary (a crossing often straddles one).
   const casing = selected ? SEL_BG : BG;
-  const stroke = (e: GraphEdgeElement, path: () => void) => {
-    ctx.beginPath();
-    path();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = casing;
-    ctx.lineWidth = lineW + CASING * 2;
-    ctx.stroke();
-    ctx.strokeStyle = colorOf(e.color);
-    ctx.globalAlpha = e.dotted ? 0.45 : 1;
-    ctx.setLineDash(e.dotted ? [lineW * 0.9, lineW * 0.9] : []);
-    ctx.lineWidth = lineW;
-    ctx.stroke();
-  };
+  // Node edges skip casing next to the node: lines leaving the same commit must not bite into each other there.
+  const nodeClear = Math.max(m.mergeR, m.nodeR + m.ring) + lineW * 0.75;
+  type Item = { e: GraphEdgeElement; path: () => void; casingPath: () => void };
+  const items: Item[] = [];
 
   for (const { up, down } of passing.values()) {
     if (up && down) {
@@ -89,25 +80,30 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
       const a = boundaryPoint(m, up);
       const b = boundaryPoint(m, down);
       const c = { x: laneX(m, up.lane), y: mid };
-      stroke(up, () => { ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.lineTo(b.x, b.y); });
+      const path = () => { ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.lineTo(b.x, b.y); };
+      items.push({ e: up, path, casingPath: path });
     } else {
       singles.push((up ?? down)!);
     }
   }
-  // Edges touching the node (or unpaired halves at arrows): straight from the row centre; the node covers the joint.
-  // They share an endpoint, so all their casings go down before any colour; otherwise one edge's casing would bite
-  // into its sibling right under the node.
-  const singlePaths = singles.map((e) => {
+  for (const e of singles) {
     const b = boundaryPoint(m, e);
     const x = laneX(m, e.lane);
-    return { e, path: () => { ctx.moveTo(x, mid); ctx.lineTo(b.x, b.y); } };
-  });
-  for (const { path } of singlePaths) {
-    ctx.beginPath(); path();
+    const len = Math.hypot(b.x - x, b.y - mid) || 1;
+    const t = Math.min(1, nodeClear / len);
+    const sx = x + (b.x - x) * t, sy = mid + (b.y - mid) * t;
+    items.push({
+      e,
+      path: () => { ctx.moveTo(x, mid); ctx.lineTo(b.x, b.y); },
+      casingPath: () => { ctx.moveTo(sx, sy); ctx.lineTo(b.x, b.y); },
+    });
+  }
+
+  items.sort((p, q) => p.e.color - q.e.color);
+  for (const { e, path, casingPath } of items) {
+    ctx.beginPath(); casingPath();
     ctx.setLineDash([]); ctx.globalAlpha = 1;
     ctx.strokeStyle = casing; ctx.lineWidth = lineW + CASING * 2; ctx.stroke();
-  }
-  for (const { e, path } of singlePaths) {
     ctx.beginPath(); path();
     ctx.strokeStyle = colorOf(e.color);
     ctx.globalAlpha = e.dotted ? 0.45 : 1;
