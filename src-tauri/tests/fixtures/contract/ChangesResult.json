@@ -1,0 +1,16 @@
+{
+  "mode": "union",
+  "isMerge": false,
+  "files": [
+    {
+      "path": "src/new.ts",
+      "oldPath": "src/old.ts",
+      "status": "renamed",
+      "additions": 3,
+      "deletions": 1,
+      "binary": false,
+      "fromHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "toHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}

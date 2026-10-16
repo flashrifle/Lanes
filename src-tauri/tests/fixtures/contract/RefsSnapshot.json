@@ -1,0 +1,26 @@
+{
+  "head": {
+    "detached": false,
+    "unborn": false,
+    "branch": "main",
+    "fullName": "refs/heads/main",
+    "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "refs": [
+    {
+      "name": "main",
+      "fullName": "refs/heads/main",
+      "type": "localBranch",
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "index": 0,
+      "remote": null,
+      "upstream": "refs/remotes/origin/main",
+      "ahead": 1,
+      "behind": 2,
+      "upstreamGone": false,
+      "isCurrent": true,
+      "isFavorite": true
+    }
+  ],
+  "operation": "cherryPick"
+}

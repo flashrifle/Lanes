@@ -1,0 +1,14 @@
+{
+  "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "parents": [
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "authorName": "n",
+  "authorEmail": "e",
+  "authorTime": 1,
+  "committerName": "cn",
+  "committerEmail": "ce",
+  "committerTime": 2,
+  "subject": "s",
+  "body": "b"
+}

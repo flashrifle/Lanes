@@ -1,0 +1,7 @@
+{
+  "repoPath": "/r",
+  "scopes": [
+    "head",
+    "fetchHead"
+  ]
+}

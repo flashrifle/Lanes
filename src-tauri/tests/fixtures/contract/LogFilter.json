@@ -1,0 +1,17 @@
+{
+  "text": {
+    "text": "x",
+    "regex": false,
+    "matchCase": true
+  },
+  "users": [
+    "me"
+  ],
+  "date": {
+    "since": 1,
+    "until": null
+  },
+  "paths": [
+    "a"
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "snapshotId": 1,
+  "repoPath": "/r",
+  "scope": {
+    "refs": [
+      "HEAD"
+    ],
+    "limit": 10
+  },
+  "commitCount": 1,
+  "hashes": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "parents": [
+    [
+      -1
+    ]
+  ],
+  "timestamps": [
+    1
+  ],
+  "refs": {
+    "head": {
+      "detached": false,
+      "unborn": false,
+      "branch": "main",
+      "fullName": "refs/heads/main",
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "refs": [
+      {
+        "name": "main",
+        "fullName": "refs/heads/main",
+        "type": "localBranch",
+        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "index": 0,
+        "remote": null,
+        "upstream": "refs/remotes/origin/main",
+        "ahead": 1,
+        "behind": 2,
+        "upstreamGone": false,
+        "isCurrent": true,
+        "isFavorite": true
+      }
+    ],
+    "operation": "cherryPick"
+  },
+  "headIndex": 0,
+  "truncated": false,
+  "loadMillis": 5
+}

@@ -1,51 +1,77 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useEffect } from 'react';
+import './App.css';
+import { BranchPanel } from './ui/branches/BranchPanel';
+import { Icon } from './ui/common/Icons';
+import { ChangesTree } from './ui/details/ChangesTree';
+import { CommitDetailsPanel } from './ui/details/CommitDetailsPanel';
+import { ConfirmDialog } from './ui/dialogs/ConfirmDialog';
+import { CreateBranchDialog } from './ui/dialogs/CreateBranchDialog';
+import { Toast } from './ui/dialogs/Toast';
+import { DiffView } from './ui/diff/DiffView';
+import { SplitPane } from './ui/layout/SplitPane';
+import { FilterBar } from './ui/log/FilterBar';
+import { LogTable } from './ui/log/LogTable';
+import { closeRepo, initApp, useStore } from './ui/state/store';
+import { WelcomeScreen } from './ui/welcome/WelcomeScreen';
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+const OP_LABEL = { merge: '병합 진행 중', rebase: '리베이스 진행 중', cherryPick: '체리픽 진행 중', revert: '되돌리기 진행 중', bisect: '이분 탐색 중' } as const;
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
+function RepoBar() {
+  const repo = useStore((s) => s.repo);
+  const snapshot = useStore((s) => s.snapshot);
+  const head = snapshot?.refs.head;
+  const op = snapshot?.refs.operation;
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    <div className="repo-bar">
+      <span className="repo-name" title={repo?.path}>{repo?.name}</span>
+      {head && (
+        <span className="repo-branch">
+          <Icon name="branch" size={12} />
+          {head.unborn ? '(커밋 없음)' : head.detached ? `HEAD 분리됨 ${head.hash?.slice(0, 8) ?? ''}` : head.branch}
+        </span>
+      )}
+      {op && <span className="repo-op">{OP_LABEL[op]}</span>}
+      <span className="grow" />
+      {snapshot && <span className="muted">{snapshot.commitCount.toLocaleString('ko-KR')}개 커밋 · {snapshot.loadMillis}ms</span>}
+      <button className="btn small" onClick={() => void closeRepo()}>저장소 닫기</button>
+    </div>
   );
 }
 
-export default App;
+function RepoView() {
+  return (
+    <div className="repo-view">
+      <RepoBar />
+      <div className="repo-main">
+        <SplitPane dir="h" fixed="start" defaultSize={240} min={160} storageKey="branches">
+          <BranchPanel />
+          <SplitPane dir="h" fixed="end" defaultSize={420} min={260} storageKey="right">
+            <div className="center-col">
+              <FilterBar />
+              <LogTable />
+            </div>
+            <SplitPane dir="v" fixed="start" defaultSize={260} min={80} storageKey="changes">
+              <ChangesTree />
+              <CommitDetailsPanel />
+            </SplitPane>
+          </SplitPane>
+        </SplitPane>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const repo = useStore((s) => s.repo);
+  const dialog = useStore((s) => s.dialog);
+  useEffect(() => { void initApp(); }, []);
+  return (
+    <div className="app">
+      {repo ? <RepoView /> : <WelcomeScreen />}
+      <DiffView />
+      {dialog?.kind === 'createBranch' && <CreateBranchDialog startPoint={dialog.startPoint} startLabel={dialog.startLabel} />}
+      {dialog?.kind === 'confirm' && <ConfirmDialog dialog={dialog} />}
+      <Toast />
+    </div>
+  );
+}

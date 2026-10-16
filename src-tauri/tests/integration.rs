@@ -1,0 +1,596 @@
+use git_log_viewer_lib::error::ErrorCode;
+use git_log_viewer_lib::git::refs::{Favorites, read_refs};
+use git_log_viewer_lib::git::{changes, diff, log, ops, repo};
+use git_log_viewer_lib::models::*;
+use git_log_viewer_lib::snapshot::{self, SnapshotStore};
+use git_log_viewer_lib::state::AppState;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::time::Duration;
+use tempfile::TempDir;
+
+static CLOCK: AtomicI64 = AtomicI64::new(1_700_000_000);
+
+fn git_in(dir: &Path, args: &[&str]) -> String {
+    let t = CLOCK.fetch_add(60, Ordering::SeqCst);
+    let date = format!("{t} +0000");
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_AUTHOR_NAME", "Test User")
+        .env("GIT_AUTHOR_EMAIL", "test@example.com")
+        .env("GIT_COMMITTER_NAME", "Test User")
+        .env("GIT_COMMITTER_EMAIL", "test@example.com")
+        .env("GIT_AUTHOR_DATE", &date)
+        .env("GIT_COMMITTER_DATE", &date)
+        .env("GIT_EDITOR", "true")
+        .output()
+        .expect("run git");
+    assert!(
+        out.status.success(),
+        "git {:?} failed: {}",
+        args,
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+struct TestRepo {
+    _tmp: TempDir,
+    dir: PathBuf,
+}
+
+impl TestRepo {
+    fn new() -> Self {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().canonicalize().unwrap().join("work");
+        std::fs::create_dir_all(&dir).unwrap();
+        git_in(&dir, &["init", "-q", "-b", "main"]);
+        git_in(&dir, &["config", "user.name", "Test User"]);
+        git_in(&dir, &["config", "user.email", "test@example.com"]);
+        git_in(&dir, &["config", "commit.gpgsign", "false"]);
+        TestRepo { _tmp: tmp, dir }
+    }
+    fn path(&self) -> &str {
+        self.dir.to_str().unwrap()
+    }
+    fn git(&self, args: &[&str]) -> String {
+        git_in(&self.dir, args)
+    }
+    fn write(&self, name: &str, content: &str) {
+        let p = self.dir.join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, content).unwrap();
+    }
+    fn commit_file(&self, name: &str, content: &str, msg: &str) -> String {
+        self.write(name, content);
+        self.git(&["add", "-A"]);
+        self.git(&["commit", "-q", "-m", msg]);
+        self.git(&["rev-parse", "HEAD"])
+    }
+    fn load(&self, store: &SnapshotStore) -> LogSnapshot {
+        snapshot::load_log(store, self.path(), LogScope { refs: None, limit: None }, &Favorites::default()).unwrap()
+    }
+}
+
+fn no_progress() -> impl FnMut(&str) {
+    |_: &str| {}
+}
+
+#[test]
+fn linear_history() {
+    let r = TestRepo::new();
+    let h1 = r.commit_file("a.txt", "one\n", "first");
+    let h2 = r.commit_file("a.txt", "one\ntwo\n", "second\n\nbody text");
+    let h3 = r.commit_file("b.txt", "b\n", "third");
+    let store = SnapshotStore::default();
+    let s = r.load(&store);
+    assert_eq!(s.hashes, vec![h3.clone(), h2.clone(), h1.clone()]);
+    assert_eq!(s.parents, vec![vec![1], vec![2], vec![]]);
+    assert_eq!(s.head_index, Some(0));
+    assert!(!s.truncated);
+    assert_eq!(s.timestamps.len(), 3);
+    let head_ref = s.refs.refs.iter().find(|x| x.ref_type == RefType::Head).unwrap();
+    assert_eq!(head_ref.index, Some(0));
+    let main = s.refs.refs.iter().find(|x| x.full_name == "refs/heads/main").unwrap();
+    assert!(main.is_current && main.is_favorite);
+    assert!(main.upstream.is_none() && main.ahead.is_none());
+
+    let snap = store.get(s.snapshot_id).unwrap();
+    let rows = snapshot::commit_rows(&snap, &[2, 1]).unwrap();
+    assert_eq!(rows[0].subject, "first");
+    assert_eq!(rows[1].subject, "second");
+    assert_eq!(rows[1].parent_count, 1);
+    assert_eq!(snapshot::commit_rows(&snap, &[3]).unwrap_err().code, ErrorCode::InvalidArgument);
+    assert_eq!(store.get(9999).err().unwrap().code, ErrorCode::SnapshotExpired);
+
+    let authors = snapshot::authors(&snap);
+    assert_eq!(authors.len(), 1);
+    assert_eq!(authors[0].commit_count, 3);
+
+    let d = log::commit_details(r.path(), &h2).unwrap();
+    assert_eq!(d.subject, "second");
+    assert_eq!(d.body, "body text");
+    assert_eq!(d.parents, vec![h1.clone()]);
+    assert_eq!(d.author_email, "test@example.com");
+
+    // limit + truncation
+    let lim = snapshot::load_log(&store, r.path(), LogScope { refs: None, limit: Some(2) }, &Favorites::default()).unwrap();
+    assert_eq!(lim.commit_count, 2);
+    assert!(lim.truncated);
+    assert_eq!(lim.parents[1], vec![-1]);
+
+    // filters
+    let f = |text: &str, regex: bool, case: bool| LogFilter {
+        text: Some(TextFilter { text: text.into(), regex, match_case: case }),
+        users: None,
+        date: None,
+        paths: None,
+    };
+    let m = snapshot::filter_commits(&snap, &f("BODY", false, false)).unwrap().matches;
+    assert_eq!(m, Some(vec![1]));
+    let m = snapshot::filter_commits(&snap, &f("BODY", false, true)).unwrap().matches;
+    assert_eq!(m, Some(vec![]));
+    let m = snapshot::filter_commits(&snap, &f("^(first|third)$", true, true)).unwrap().matches;
+    assert_eq!(m, Some(vec![0, 2]));
+    assert_eq!(snapshot::filter_commits(&snap, &f("(", true, true)).unwrap_err().code, ErrorCode::InvalidArgument);
+    let m = snapshot::filter_commits(&snap, &f(&h2[..8], false, false)).unwrap().matches;
+    assert_eq!(m, Some(vec![1]));
+    let by_path = LogFilter { text: None, users: None, date: None, paths: Some(vec!["b.txt".into()]) };
+    assert_eq!(snapshot::filter_commits(&snap, &by_path).unwrap().matches, Some(vec![0]));
+    let by_user = LogFilter { text: None, users: Some(vec!["TEST@example".into()]), date: None, paths: None };
+    assert_eq!(snapshot::filter_commits(&snap, &by_user).unwrap().matches.unwrap().len(), 3);
+    let by_user = LogFilter { text: None, users: Some(vec!["nobody".into()]), date: None, paths: None };
+    assert_eq!(snapshot::filter_commits(&snap, &by_user).unwrap().matches, Some(vec![]));
+    let by_date = LogFilter {
+        text: None,
+        users: None,
+        date: Some(DateRange { since: Some(s.timestamps[1]), until: Some(s.timestamps[1]) }),
+        paths: None,
+    };
+    assert_eq!(snapshot::filter_commits(&snap, &by_date).unwrap().matches, Some(vec![1]));
+    let empty = LogFilter { text: None, users: None, date: None, paths: None };
+    assert_eq!(snapshot::filter_commits(&snap, &empty).unwrap().matches, None);
+
+    // changes
+    let c = changes::changed_files(r.path(), std::slice::from_ref(&h2)).unwrap();
+    assert_eq!(c.mode, ChangesMode::Single);
+    assert!(!c.is_merge);
+    assert_eq!(c.files.len(), 1);
+    assert_eq!(c.files[0].status, FileStatus::Modified);
+    assert_eq!((c.files[0].additions, c.files[0].deletions), (Some(1), Some(0)));
+    assert_eq!(c.files[0].from_hash.as_deref(), Some(h1.as_str()));
+    // range: newest first, linear chain
+    let c = changes::changed_files(r.path(), &[h3.clone(), h2.clone()]).unwrap();
+    assert_eq!(c.mode, ChangesMode::Range);
+    assert_eq!(c.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(), vec!["a.txt", "b.txt"]);
+    assert_eq!(c.files[0].to_hash, h3);
+    assert_eq!(c.files[0].from_hash.as_deref(), Some(h1.as_str()));
+    // union: non adjacent
+    let c = changes::changed_files(r.path(), &[h3.clone(), h1.clone()]).unwrap();
+    assert_eq!(c.mode, ChangesMode::Union);
+    assert_eq!(c.files.len(), 2);
+    assert_eq!(c.files.iter().find(|f| f.path == "a.txt").unwrap().to_hash, h1);
+
+    // diff
+    let fd = diff::file_diff(
+        r.path(),
+        &DiffRequest { path: "a.txt".into(), old_path: None, from_hash: Some(h1.clone()), to_hash: h2.clone(), context_lines: None },
+    )
+    .unwrap();
+    assert_eq!(fd.hunks.len(), 1);
+    assert!(fd.hunks[0].lines.iter().any(|l| l.kind == DiffLineKind::Add && l.text == "two"));
+
+    // signatures
+    let sigs = log::signatures(r.path(), &[h1.clone(), h3.clone()]).unwrap();
+    assert_eq!(sigs.len(), 2);
+    assert_eq!(sigs[0].hash, h1);
+    assert_eq!(sigs[0].status, SignatureStatus::None);
+
+    // containing refs
+    assert_eq!(git_log_viewer_lib::git::refs::containing_refs(r.path(), &h1).unwrap(), vec!["refs/heads/main"]);
+}
+
+#[test]
+fn branch_and_merge() {
+    let r = TestRepo::new();
+    let c1 = r.commit_file("a.txt", "a\n", "base");
+    r.git(&["checkout", "-q", "-b", "feat"]);
+    let c2 = r.commit_file("f.txt", "f\n", "feat work");
+    r.git(&["checkout", "-q", "main"]);
+    let c3 = r.commit_file("m.txt", "m\n", "main work");
+    r.git(&["merge", "--no-ff", "-q", "-m", "merge feat", "feat"]);
+    let merge = r.git(&["rev-parse", "HEAD"]);
+    let store = SnapshotStore::default();
+    let s = r.load(&store);
+    assert_eq!(s.commit_count, 4);
+    assert_eq!(s.hashes[0], merge);
+    let idx = |h: &str| s.hashes.iter().position(|x| x == h).unwrap() as i64;
+    assert_eq!(s.parents[0], vec![idx(&c3), idx(&c2)]);
+    assert_eq!(s.parents[idx(&c2) as usize], vec![idx(&c1)]);
+    // topo-valid: parents appear after children
+    for (i, ps) in s.parents.iter().enumerate() {
+        for &p in ps {
+            assert!(p > i as i64);
+        }
+    }
+    let snap = store.get(s.snapshot_id).unwrap();
+    assert_eq!(snapshot::commit_rows(&snap, &[0]).unwrap()[0].parent_count, 2);
+
+    // merge: single mode vs first parent
+    let c = changes::changed_files(r.path(), std::slice::from_ref(&merge)).unwrap();
+    assert!(c.is_merge);
+    assert_eq!(c.files.len(), 1);
+    assert_eq!(c.files[0].path, "f.txt");
+    // scope: only feat
+    let only = snapshot::load_log(
+        &store,
+        r.path(),
+        LogScope { refs: Some(vec!["refs/heads/feat".into()]), limit: None },
+        &Favorites::default(),
+    )
+    .unwrap();
+    assert_eq!(only.commit_count, 2);
+    assert_eq!(
+        snapshot::load_log(&store, r.path(), LogScope { refs: Some(vec!["--all".into()]), limit: None }, &Favorites::default())
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidArgument
+    );
+
+    // containing branches
+    let cont = git_log_viewer_lib::git::refs::containing_refs(r.path(), &c2).unwrap();
+    assert_eq!(cont, vec!["refs/heads/feat", "refs/heads/main"]);
+}
+
+#[test]
+fn rename_root_and_binary() {
+    let r = TestRepo::new();
+    let root = r.commit_file("old name.txt", "line1\nline2\nline3\nline4\nline5\n", "root");
+    std::fs::write(r.dir.join("bin.dat"), [0u8, 159, 146, 150, 0, 1, 2]).unwrap();
+    r.git(&["add", "-A"]);
+    r.git(&["commit", "-q", "-m", "add binary"]);
+    let bin_commit = r.git(&["rev-parse", "HEAD"]);
+    std::fs::create_dir_all(r.dir.join("new")).unwrap();
+    r.git(&["mv", "old name.txt", "new/name.txt"]);
+    r.git(&["commit", "-q", "-m", "rename"]);
+    let ren = r.git(&["rev-parse", "HEAD"]);
+
+    let c = changes::changed_files(r.path(), std::slice::from_ref(&root)).unwrap();
+    assert_eq!(c.files.len(), 1);
+    assert_eq!(c.files[0].status, FileStatus::Added);
+    assert_eq!(c.files[0].from_hash, None);
+    assert_eq!(c.files[0].additions, Some(5));
+    // root diff vs empty tree
+    let fd = diff::file_diff(
+        r.path(),
+        &DiffRequest { path: "old name.txt".into(), old_path: None, from_hash: None, to_hash: root.clone(), context_lines: Some(1) },
+    )
+    .unwrap();
+    assert_eq!(fd.hunks[0].lines.len(), 5);
+    assert_eq!(fd.new_mode.as_deref(), Some("100644"));
+
+    let c = changes::changed_files(r.path(), std::slice::from_ref(&bin_commit)).unwrap();
+    assert!(c.files[0].binary);
+    assert_eq!(c.files[0].additions, None);
+    let fd = diff::file_diff(
+        r.path(),
+        &DiffRequest { path: "bin.dat".into(), old_path: None, from_hash: Some(root.clone()), to_hash: bin_commit, context_lines: None },
+    )
+    .unwrap();
+    assert!(fd.binary);
+    assert!(fd.hunks.is_empty());
+
+    let c = changes::changed_files(r.path(), std::slice::from_ref(&ren)).unwrap();
+    assert_eq!(c.files.len(), 1);
+    let f = &c.files[0];
+    assert_eq!(f.status, FileStatus::Renamed);
+    assert_eq!(f.path, "new/name.txt");
+    assert_eq!(f.old_path.as_deref(), Some("old name.txt"));
+    assert_eq!((f.additions, f.deletions), (Some(0), Some(0)));
+    let fd = diff::file_diff(
+        r.path(),
+        &DiffRequest {
+            path: f.path.clone(),
+            old_path: f.old_path.clone(),
+            from_hash: f.from_hash.clone(),
+            to_hash: f.to_hash.clone(),
+            context_lines: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(fd.old_path.as_deref(), Some("old name.txt"));
+    assert!(fd.hunks.is_empty());
+}
+
+#[test]
+fn unborn_repo() {
+    let r = TestRepo::new();
+    let refs = read_refs(r.path(), &Favorites::default()).unwrap();
+    assert!(refs.head.unborn);
+    assert!(!refs.head.detached);
+    assert_eq!(refs.head.branch.as_deref(), Some("main"));
+    assert!(refs.head.hash.is_none());
+    assert!(refs.refs.is_empty());
+    let store = SnapshotStore::default();
+    let s = r.load(&store);
+    assert_eq!(s.commit_count, 0);
+    assert_eq!(s.head_index, None);
+    assert!(s.hashes.is_empty());
+    let s2 = snapshot::load_log(&store, r.path(), LogScope { refs: Some(vec!["HEAD".into()]), limit: None }, &Favorites::default()).unwrap();
+    assert_eq!(s2.commit_count, 0);
+    let info = repo::open_repo_info(r.path()).unwrap();
+    assert_eq!(info.path, r.path());
+}
+
+#[test]
+fn not_a_repo_error() {
+    let tmp = tempfile::tempdir().unwrap();
+    let e = repo::open_repo_info(tmp.path().to_str().unwrap()).unwrap_err();
+    assert_eq!(e.code, ErrorCode::NotARepo);
+}
+
+#[test]
+fn branch_ops() {
+    let r = TestRepo::new();
+    let locks = ops::RepoLocks::default();
+    r.commit_file("a.txt", "a\n", "base");
+
+    let v = ops::validate_branch_name(r.path(), "feature/x").unwrap();
+    assert!(v.valid && !v.exists);
+    let v = ops::validate_branch_name(r.path(), "main").unwrap();
+    assert!(v.valid && v.exists && v.message.is_some());
+    let v = ops::validate_branch_name(r.path(), "bad name").unwrap();
+    assert!(!v.valid && v.message.is_some());
+    assert!(!ops::validate_branch_name(r.path(), "-x").unwrap().valid);
+
+    ops::create_branch(&locks, r.path(), "topic", "HEAD", true).unwrap();
+    assert_eq!(r.git(&["symbolic-ref", "--short", "HEAD"]), "topic");
+    let c2 = r.commit_file("t.txt", "t\n", "topic only");
+    ops::checkout(&locks, r.path(), &CheckoutTarget::LocalBranch { name: "main".into() }, &mut no_progress()).unwrap();
+    assert_eq!(
+        ops::create_branch(&locks, r.path(), "topic", "HEAD", false).unwrap_err().code,
+        ErrorCode::InvalidArgument
+    );
+
+    // unmerged -> notFullyMerged, force works
+    let e = ops::delete_branch(&locks, r.path(), "topic", false).unwrap_err();
+    assert_eq!(e.code, ErrorCode::NotFullyMerged);
+    ops::delete_branch(&locks, r.path(), "topic", true).unwrap();
+    assert!(!ops::validate_branch_name(r.path(), "topic").unwrap().exists);
+    // current branch refuses
+    assert_eq!(ops::delete_branch(&locks, r.path(), "main", true).unwrap_err().code, ErrorCode::InvalidArgument);
+    // merged -> -d works
+    ops::create_branch(&locks, r.path(), "merged", "HEAD", false).unwrap();
+    ops::delete_branch(&locks, r.path(), "merged", false).unwrap();
+
+    // detached checkout of commit / tag
+    r.git(&["tag", "v1"]);
+    ops::checkout(&locks, r.path(), &CheckoutTarget::Tag { name: "v1".into() }, &mut no_progress()).unwrap();
+    let refs = read_refs(r.path(), &Favorites::default()).unwrap();
+    assert!(refs.head.detached);
+    ops::checkout(&locks, r.path(), &CheckoutTarget::Commit { hash: c2.clone() }, &mut no_progress()).unwrap();
+    assert_eq!(r.git(&["rev-parse", "HEAD"]), c2);
+    assert_eq!(
+        ops::checkout(&locks, r.path(), &CheckoutTarget::Commit { hash: "--force".into() }, &mut no_progress())
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidArgument
+    );
+}
+
+#[test]
+fn checkout_would_overwrite() {
+    let r = TestRepo::new();
+    let locks = ops::RepoLocks::default();
+    r.commit_file("a.txt", "a\n", "base");
+    r.git(&["checkout", "-q", "-b", "other"]);
+    r.commit_file("a.txt", "other\n", "other change");
+    r.git(&["checkout", "-q", "main"]);
+    r.write("a.txt", "dirty local\n");
+    let e = ops::checkout(&locks, r.path(), &CheckoutTarget::LocalBranch { name: "other".into() }, &mut no_progress()).unwrap_err();
+    assert_eq!(e.code, ErrorCode::WouldOverwrite);
+}
+
+#[test]
+fn busy_when_locked() {
+    let locks = Arc::new(ops::RepoLocks::default());
+    let l2 = locks.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx2, rx2) = std::sync::mpsc::channel::<()>();
+    let t = std::thread::spawn(move || {
+        l2.run("/x", || {
+            tx.send(()).unwrap();
+            rx2.recv().unwrap();
+            Ok(())
+        })
+    });
+    rx.recv().unwrap();
+    assert_eq!(locks.run("/x", || Ok(())).unwrap_err().code, ErrorCode::Busy);
+    locks.run("/y", || Ok(())).unwrap();
+    tx2.send(()).unwrap();
+    t.join().unwrap().unwrap();
+    locks.run("/x", || Ok(())).unwrap();
+}
+
+/// bare remote + two clones
+fn remote_setup() -> (TempDir, PathBuf, PathBuf, PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let bare = base.join("remote.git");
+    let a = base.join("a");
+    let b = base.join("b");
+    std::fs::create_dir_all(&bare).unwrap();
+    git_in(&bare, &["init", "-q", "--bare", "-b", "main"]);
+    for d in [&a, &b] {
+        std::fs::create_dir_all(d).unwrap();
+        git_in(d, &["init", "-q", "-b", "main"]);
+        git_in(d, &["remote", "add", "origin", bare.to_str().unwrap()]);
+    }
+    std::fs::write(a.join("f.txt"), "1\n").unwrap();
+    git_in(&a, &["add", "-A"]);
+    git_in(&a, &["commit", "-q", "-m", "c1"]);
+    git_in(&a, &["push", "-q", "-u", "origin", "main"]);
+    git_in(&b, &["fetch", "-q", "origin"]);
+    git_in(&b, &["reset", "-q", "--hard", "origin/main"]);
+    git_in(&b, &["branch", "-q", "--set-upstream-to=origin/main", "main"]);
+    (tmp, bare, a, b)
+}
+
+#[test]
+fn fetch_pull_ff_only_refusal() {
+    let (_tmp, _bare, a, b) = remote_setup();
+    let locks = ops::RepoLocks::default();
+    let bp = b.to_str().unwrap();
+    // A pushes, B diverges locally
+    std::fs::write(a.join("g.txt"), "g\n").unwrap();
+    git_in(&a, &["add", "-A"]);
+    git_in(&a, &["commit", "-q", "-m", "from a"]);
+    git_in(&a, &["push", "-q", "origin", "main"]);
+    std::fs::write(b.join("h.txt"), "h\n").unwrap();
+    git_in(&b, &["add", "-A"]);
+    git_in(&b, &["commit", "-q", "-m", "local b"]);
+
+    let mut lines = Vec::new();
+    ops::fetch(&locks, bp, None, &mut |l: &str| lines.push(l.to_string())).unwrap();
+    let refs = read_refs(bp, &Favorites::default()).unwrap();
+    let main = refs.refs.iter().find(|r| r.full_name == "refs/heads/main").unwrap();
+    assert_eq!(main.upstream.as_deref(), Some("refs/remotes/origin/main"));
+    assert_eq!((main.ahead, main.behind), (Some(1), Some(1)));
+    assert!(refs.refs.iter().any(|r| r.full_name == "refs/remotes/origin/main" && r.remote.as_deref() == Some("origin")));
+
+    let e = ops::pull(&locks, bp, PullMode::FfOnly, &mut no_progress()).unwrap_err();
+    assert_eq!(e.code, ErrorCode::NonFastForward, "{e:?}");
+    ops::pull(&locks, bp, PullMode::Rebase, &mut no_progress()).unwrap();
+    let main = read_refs(bp, &Favorites::default()).unwrap().refs.into_iter().find(|r| r.full_name == "refs/heads/main").unwrap();
+    assert_eq!((main.ahead, main.behind), (Some(1), Some(0)));
+}
+
+#[test]
+fn pull_merge_and_no_upstream_and_remote_checkout() {
+    let (_tmp, _bare, a, b) = remote_setup();
+    let locks = ops::RepoLocks::default();
+    let bp = b.to_str().unwrap();
+    // remote-only branch
+    git_in(&a, &["checkout", "-q", "-b", "fix/login"]);
+    std::fs::write(a.join("l.txt"), "l\n").unwrap();
+    git_in(&a, &["add", "-A"]);
+    git_in(&a, &["commit", "-q", "-m", "login fix"]);
+    git_in(&a, &["push", "-q", "origin", "fix/login"]);
+    ops::fetch(&locks, bp, Some("origin"), &mut no_progress()).unwrap();
+    ops::checkout(
+        &locks,
+        bp,
+        &CheckoutTarget::RemoteBranch { name: "origin/fix/login".into(), local_name: None },
+        &mut no_progress(),
+    )
+    .unwrap();
+    assert_eq!(git_in(&b, &["symbolic-ref", "--short", "HEAD"]), "fix/login");
+    assert_eq!(git_in(&b, &["rev-parse", "--abbrev-ref", "fix/login@{upstream}"]), "origin/fix/login");
+    // checking out again reuses the tracking local branch
+    ops::checkout(&locks, bp, &CheckoutTarget::LocalBranch { name: "main".into() }, &mut no_progress()).unwrap();
+    ops::checkout(
+        &locks,
+        bp,
+        &CheckoutTarget::RemoteBranch { name: "origin/fix/login".into(), local_name: None },
+        &mut no_progress(),
+    )
+    .unwrap();
+    // conflicting local name
+    git_in(&b, &["branch", "-q", "other-local", "main"]);
+    let e = ops::checkout(
+        &locks,
+        bp,
+        &CheckoutTarget::RemoteBranch { name: "origin/fix/login".into(), local_name: Some("other-local".into()) },
+        &mut no_progress(),
+    )
+    .unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
+
+    // no upstream
+    git_in(&b, &["checkout", "-q", "-b", "lonely"]);
+    let e = ops::pull(&locks, bp, PullMode::FfOnly, &mut no_progress()).unwrap_err();
+    assert_eq!(e.code, ErrorCode::NoUpstream, "{e:?}");
+
+    // merge pull creates merge commit
+    git_in(&b, &["checkout", "-q", "main"]);
+    std::fs::write(a.join("z.txt"), "z\n").unwrap();
+    git_in(&a, &["checkout", "-q", "main"]);
+    git_in(&a, &["add", "-A"]);
+    git_in(&a, &["commit", "-q", "-m", "a again"]);
+    git_in(&a, &["push", "-q", "origin", "main"]);
+    std::fs::write(b.join("y.txt"), "y\n").unwrap();
+    git_in(&b, &["add", "-A"]);
+    git_in(&b, &["commit", "-q", "-m", "b again"]);
+    ops::pull(&locks, bp, PullMode::Merge, &mut no_progress()).unwrap();
+    assert_eq!(git_in(&b, &["rev-list", "--merges", "--count", "HEAD"]), "1");
+}
+
+#[test]
+fn state_open_repo_recents_favorites_and_watcher() {
+    let r = TestRepo::new();
+    r.commit_file("a.txt", "a\n", "base");
+    let state_dir = tempfile::tempdir().unwrap();
+    let state = AppState::new(Some(state_dir.path().join("state.json")));
+    let (tx, rx) = std::sync::mpsc::channel::<RepoChangedEvent>();
+    let tx = std::sync::Mutex::new(tx);
+    let info = state
+        .open_repo(
+            r.path(),
+            Arc::new(move |ev| {
+                let _ = tx.lock().unwrap().send(ev);
+            }),
+        )
+        .unwrap();
+    assert_eq!(info.path, r.path());
+    assert_eq!(info.name, "work");
+    assert_eq!(info.user.name.as_deref(), Some("Test User"));
+    assert!(!info.git_version.is_empty());
+    let recents = state.persist.recents();
+    assert_eq!(recents.len(), 1);
+    assert!(recents[0].exists);
+
+    state.persist.set_favorite(r.path(), "refs/heads/main", false);
+    let s = snapshot::load_log(&state.snapshots, r.path(), LogScope { refs: None, limit: None }, &state.persist.favorites(r.path())).unwrap();
+    assert!(!s.refs.refs.iter().find(|x| x.full_name == "refs/heads/main").unwrap().is_favorite);
+
+    std::thread::sleep(Duration::from_millis(600)); // let FSEvents settle
+    while rx.try_recv().is_ok() {}
+    r.git(&["commit", "-q", "--allow-empty", "-m", "touch"]);
+    let ev = rx.recv_timeout(Duration::from_secs(5)).expect("repo-changed event");
+    assert_eq!(ev.repo_path, r.path());
+    assert!(ev.scopes.contains(&RepoChangeScope::Refs) || ev.scopes.contains(&RepoChangeScope::Head));
+
+    state.snapshots.get(s.snapshot_id).unwrap();
+    state.close_repo(r.path());
+    assert_eq!(state.snapshots.get(s.snapshot_id).err().unwrap().code, ErrorCode::SnapshotExpired);
+}
+
+#[test]
+fn merge_operation_detected() {
+    let r = TestRepo::new();
+    r.commit_file("a.txt", "base\n", "base");
+    r.git(&["checkout", "-q", "-b", "x"]);
+    r.commit_file("a.txt", "x\n", "x");
+    r.git(&["checkout", "-q", "main"]);
+    r.commit_file("a.txt", "main\n", "main");
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(&r.dir)
+        .args(["merge", "x"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@e")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@e")
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let refs = read_refs(r.path(), &Favorites::default()).unwrap();
+    assert_eq!(refs.operation, Some(RepoOperation::Merge));
+}

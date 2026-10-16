@@ -12,9 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "git-log-viewer",
-        "width": 800,
-        "height": 600
+        "title": "Git Log",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 900
       }
     ],
     "security": {

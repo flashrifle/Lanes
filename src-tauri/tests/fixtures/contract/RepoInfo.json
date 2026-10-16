@@ -1,0 +1,14 @@
+{
+  "path": "/r",
+  "name": "r",
+  "gitDir": "/r/.git",
+  "commonDir": "/r/.git",
+  "user": {
+    "name": null,
+    "email": null
+  },
+  "remotes": [
+    "origin"
+  ],
+  "gitVersion": "2.50.1"
+}
