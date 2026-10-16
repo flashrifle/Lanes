@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34373D"/>
+      <stop offset="1" stop-color="#1B1C1F"/>
+    </linearGradient>
+    <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- macOS icon grid: 824x824 squircle-ish plate centered on a 1024 canvas -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  </g>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#hl)"/>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="3"/>
+
+  <g transform="translate(-48 0)">
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="46">
+    <!-- green: short-lived branch off purple, still open (tip) -->
+    <path d="M620 560 C620 470 780 470 780 380 L780 330" stroke="#5FB865"/>
+    <!-- purple: feature branch that forks from main and merges back -->
+    <path d="M400 720 C400 640 620 640 620 560 L620 420 C620 340 400 340 400 270" stroke="#A571E6"/>
+    <!-- blue: main lane -->
+    <path d="M400 860 L400 170" stroke="#4B8DF8"/>
+  </g>
+
+  <g stroke="#232427" stroke-width="16">
+    <circle cx="400" cy="270" r="50" fill="#4B8DF8"/>
+    <circle cx="400" cy="500" r="42" fill="#4B8DF8"/>
+    <circle cx="400" cy="720" r="42" fill="#4B8DF8"/>
+    <circle cx="620" cy="560" r="42" fill="#A571E6"/>
+    <circle cx="620" cy="420" r="42" fill="#A571E6"/>
+    <circle cx="780" cy="330" r="42" fill="#5FB865"/>
+  </g>
+  </g>
+</svg>
