@@ -38,21 +38,21 @@
     <!-- soft neon glow behind the lanes -->
     <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="96" opacity="0.45" filter="url(#glow)">
       <path d="M352 1000 L352 40" stroke="url(#gMain)"/>
-      <path d="M352 820 L572 600 L572 490 L352 270" stroke="url(#gFeat)"/>
-      <path d="M572 545 L772 345 L772 230" stroke="url(#gTip)"/>
+      <path d="M352 820 L627 545 L352 270" stroke="url(#gFeat)"/>
+      <path d="M627 545 L802 370 L802 230" stroke="url(#gTip)"/>
     </g>
     <!-- lanes: main runs off the plate edges to suggest continuing history -->
     <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="84">
-      <path d="M572 545 L772 345 L772 230" stroke="url(#gTip)"/>
-      <path d="M352 820 L572 600 L572 490 L352 270" stroke="url(#gFeat)"/>
+      <path d="M627 545 L802 370 L802 230" stroke="url(#gTip)"/>
+      <path d="M352 820 L627 545 L352 270" stroke="url(#gFeat)"/>
       <path d="M352 1000 L352 40" stroke="url(#gMain)"/>
     </g>
     <!-- commits -->
     <g stroke="#1A1B21" stroke-width="22">
       <circle cx="352" cy="270" r="70" fill="#3FC4FF"/>
       <circle cx="352" cy="820" r="58" fill="#2F78FF"/>
-      <circle cx="572" cy="545" r="58" fill="#C255EE"/>
-      <circle cx="772" cy="230" r="62" fill="#C9EE5C"/>
+      <circle cx="627" cy="545" r="58" fill="#C255EE"/>
+      <circle cx="802" cy="230" r="62" fill="#C9EE5C"/>
     </g>
     <!-- merge commit highlight dot -->
     <circle cx="352" cy="270" r="24" fill="#FFFFFF" opacity="0.9"/>

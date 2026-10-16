@@ -37,6 +37,11 @@
       "../licenses/Apache-2.0.txt": "licenses/Apache-2.0.txt"
     },
     "copyright": "Copyright 2026 flashrifle",
-    "category": "DeveloperTool"
+    "category": "DeveloperTool",
+    "macOS": {
+      "signingIdentity": "Developer ID Application: jaemin lee (ZHQJ79W867)",
+      "hardenedRuntime": true,
+      "minimumSystemVersion": "11.0"
+    }
   }
 }
