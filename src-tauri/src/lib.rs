@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod error;
 pub mod git;
+pub mod menu;
 pub mod models;
 pub mod persist;
 pub mod snapshot;
@@ -14,6 +15,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .menu(menu::build)
         .setup(|app| {
             let file = app.path().app_config_dir().ok().map(|d| d.join("state.json"));
             app.manage(state::AppState::new(file));
