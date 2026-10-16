@@ -16,6 +16,16 @@ export function graphWidth(laneCount: number, m: GraphMetrics): number {
   return Math.max(1, laneCount) * m.laneW;
 }
 
+/** Whole lanes the row actually paints into: an edge heading to the next row reaches the half-lane midpoint
+ *  (lane + otherLane) / 2, which can sit right of every node/edge lane in this row. Sizing the canvas only by
+ *  `laneCount` clipped those diagonals at the canvas edge and left a bite in the line. */
+export function rowLaneExtent(row: GraphRow): number {
+  let maxPos = Math.max(row.nodeLane, row.laneCount - 1);
+  for (const e of row.edges) maxPos = Math.max(maxPos, e.lane, (e.lane + e.otherLane) / 2);
+  for (const a of row.arrows) maxPos = Math.max(maxPos, a.lane);
+  return Math.ceil(maxPos + 1);
+}
+
 type Pt = { x: number; y: number };
 
 /** Boundary point of a half-row edge, pushed past the canvas edge along the edge's own direction. Row r's segment
@@ -85,9 +95,24 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
     }
   }
   // Edges touching the node (or unpaired halves at arrows): straight from the row centre; the node covers the joint.
-  for (const e of singles) {
+  // They share an endpoint, so all their casings go down before any colour; otherwise one edge's casing would bite
+  // into its sibling right under the node.
+  const singlePaths = singles.map((e) => {
     const b = boundaryPoint(m, e);
-    stroke(e, () => { ctx.moveTo(laneX(m, e.lane), mid); ctx.lineTo(b.x, b.y); });
+    const x = laneX(m, e.lane);
+    return { e, path: () => { ctx.moveTo(x, mid); ctx.lineTo(b.x, b.y); } };
+  });
+  for (const { path } of singlePaths) {
+    ctx.beginPath(); path();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.strokeStyle = casing; ctx.lineWidth = lineW + CASING * 2; ctx.stroke();
+  }
+  for (const { e, path } of singlePaths) {
+    ctx.beginPath(); path();
+    ctx.strokeStyle = colorOf(e.color);
+    ctx.globalAlpha = e.dotted ? 0.45 : 1;
+    ctx.setLineDash(e.dotted ? [lineW * 0.9, lineW * 0.9] : []);
+    ctx.lineWidth = lineW; ctx.stroke();
   }
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
@@ -170,7 +195,7 @@ const getDpr = (): number => window.devicePixelRatio || 1;
 export const GraphCell = memo(function GraphCell({ row, selected = false }: { row: GraphRow; selected?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const m = useMetrics();
-  const w = graphWidth(row.laneCount, m);
+  const w = graphWidth(rowLaneExtent(row), m);
   const dpr = useSyncExternalStore(subscribeDpr, getDpr);
   useEffect(() => {
     const c = ref.current;
