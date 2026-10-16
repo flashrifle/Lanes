@@ -1,11 +1,14 @@
 import { memo, useEffect, useRef, useSyncExternalStore } from 'react';
-import type { GraphRow } from '../../types';
+import type { GraphEdgeElement, GraphRow } from '../../types';
 import { useMetrics, type GraphMetrics } from './density';
 import { colorOf } from './palette';
 
 export { GRAPH_PALETTE, colorOf } from './palette';
 
 const BG = '#14161D';
+const SEL_BG = '#24304F';
+/** Width of the background-coloured outline drawn around each line (per side, px). */
+const CASING = 1.75;
 
 const laneX = (m: GraphMetrics, l: number): number => m.laneW * l + m.laneW / 2;
 
@@ -13,10 +16,24 @@ export function graphWidth(laneCount: number, m: GraphMetrics): number {
   return Math.max(1, laneCount) * m.laneW;
 }
 
+type Pt = { x: number; y: number };
+
+/** Boundary point of a half-row edge, pushed past the canvas edge along the edge's own direction. Row r's segment
+ *  and row r±1's segment are collinear (both run centre → shared midpoint → centre), so after clipping they meet
+ *  exactly on the row boundary with no notch or wedge. */
+function boundaryPoint(m: GraphMetrics, e: GraphEdgeElement): Pt {
+  const mid = m.rowH / 2;
+  const x0 = laneX(m, e.lane);
+  const x1 = laneX(m, (e.lane + e.otherLane) / 2);
+  const y1 = e.dir === 'down' ? m.rowH : 0;
+  const len = Math.hypot(x1 - x0, y1 - mid) || 1;
+  const k = (len + m.lineW) / len;
+  return { x: x0 + (x1 - x0) * k, y: mid + (y1 - mid) * k };
+}
+
 /**
- * Metro rendering. Each half-row edge is a straight diagonal (45 degrees whenever the half-row is tall enough
- * for the lane shift, otherwise as steep as the geometry allows) followed by a vertical run to the row boundary.
- * The boundary end is extended past the canvas and clipped, so adjacent rows join without butt-cap gaps.
+ * Metro rendering. A commit-to-commit connection is one straight line from row centre to row centre (each canvas
+ * draws its half), so lane shifts are single clean diagonals with sharp corners and no per-row notches.
  */
 export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: GraphMetrics, selected = false): void {
   const { rowH, lineW } = m;
@@ -24,40 +41,57 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
   ctx.lineWidth = lineW;
   ctx.lineCap = 'butt';
   ctx.lineJoin = 'miter';
-  ctx.miterLimit = 6;
+  ctx.miterLimit = 4;
+
+  // Pair the up/down halves of each edge passing through this row (same lane, not the node's lane).
+  const passing = new Map<string, { up?: GraphEdgeElement; down?: GraphEdgeElement }>();
+  const singles: GraphEdgeElement[] = [];
   for (const e of row.edges) {
-    const x0 = laneX(m, e.lane);
-    const x1 = laneX(m, (e.lane + e.otherLane) / 2);
-    const s = e.dir === 'down' ? 1 : -1;
-    const yEnd = e.dir === 'down' ? rowH : 0;
-    const dx = Math.abs(x1 - x0);
-    const half = mid;
+    if (e.lane === row.nodeLane) { singles.push(e); continue; }
+    const key = `${e.lane}|${e.color}|${e.dotted ? 1 : 0}`;
+    const p = passing.get(key) ?? {};
+    if (p[e.dir]) { singles.push(e); continue; }
+    p[e.dir] = e;
+    passing.set(key, p);
+  }
+
+  // Transit-map casing: every line is first stroked wider in the row background, so where two lines cross the
+  // later one visibly passes over the earlier one instead of the colours smearing together.
+  const casing = selected ? SEL_BG : BG;
+  const stroke = (e: GraphEdgeElement, path: () => void) => {
     ctx.beginPath();
+    path();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = casing;
+    ctx.lineWidth = lineW + CASING * 2;
+    ctx.stroke();
     ctx.strokeStyle = colorOf(e.color);
     ctx.globalAlpha = e.dotted ? 0.45 : 1;
     ctx.setLineDash(e.dotted ? [lineW * 0.9, lineW * 0.9] : []);
-    ctx.moveTo(x0, mid);
-    if (dx < 0.01) {
-      ctx.lineTo(x0, yEnd + s * lineW);
-    } else if (dx >= half) {
-      // Too shallow for a 45 degree run: one straight diagonal to the boundary (extended along its direction).
-      const k = lineW / half;
-      ctx.lineTo(x1 + (x1 - x0) * k, yEnd + s * lineW);
-    } else {
-      ctx.lineTo(x1, mid + s * dx);
-      ctx.lineTo(x1, yEnd + s * lineW);
-    }
+    ctx.lineWidth = lineW;
     ctx.stroke();
-    if (!e.dotted && dx > 0.01) {
-      // Round join at the row centre so the up/down halves of a lane shift meet without a wedge-shaped gap.
-      ctx.beginPath();
-      ctx.arc(x0, mid, lineW / 2, 0, Math.PI * 2);
-      ctx.fillStyle = colorOf(e.color);
-      ctx.fill();
+  };
+
+  for (const { up, down } of passing.values()) {
+    if (up && down) {
+      // Sharp metro corner at the row centre: straight in, straight out.
+      const a = boundaryPoint(m, up);
+      const b = boundaryPoint(m, down);
+      const c = { x: laneX(m, up.lane), y: mid };
+      stroke(up, () => { ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.lineTo(b.x, b.y); });
+    } else {
+      singles.push((up ?? down)!);
     }
+  }
+  // Edges touching the node (or unpaired halves at arrows): straight from the row centre; the node covers the joint.
+  for (const e of singles) {
+    const b = boundaryPoint(m, e);
+    stroke(e, () => { ctx.moveTo(laneX(m, e.lane), mid); ctx.lineTo(b.x, b.y); });
   }
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
+  ctx.lineJoin = 'miter';
   // Chevron arrows (truncated long edges / unloaded parents), same weight as the lines.
   const a = lineW * 1.05;
   for (const ar of row.arrows) {
