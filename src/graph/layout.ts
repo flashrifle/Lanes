@@ -22,10 +22,6 @@ export interface GraphLayoutData {
 export interface HeadInfo {
   /** candidate heads sorted by priority */
   readonly sortedHeads: Int32Array;
-  /** best ref fullName per commit (only commits with refs) */
-  readonly refKey: Map<number, string>;
-  /** commit whose fragment is pinned to color 0, or -1 */
-  readonly pinnedCommit: number;
 }
 
 /**
@@ -65,18 +61,12 @@ function compareRefs(a: Ref, b: Ref): number {
 export function computeHeads(g: CommitGraph, refs: readonly Ref[]): HeadInfo {
   const n = g.n;
   const best = new Map<number, Ref>();
-  let currentBranchCommit = -1;
-  let mainCommit = -1;
-  let masterCommit = -1;
 
   for (const r of refs) {
     const c = r.index;
     if (c == null || !(c >= 0 && c < n)) continue;
     const prev = best.get(c);
     if (prev === undefined || compareRefs(r, prev) < 0) best.set(c, r);
-    if (r.type === 'localBranch' && r.isCurrent) currentBranchCommit = c;
-    if (r.fullName === 'refs/heads/main') mainCommit = c;
-    if (r.fullName === 'refs/heads/master') masterCommit = c;
   }
 
   const withRef: number[] = [];
@@ -87,14 +77,10 @@ export function computeHeads(g: CommitGraph, refs: readonly Ref[]): HeadInfo {
   }
   withRef.sort((a, b) => compareRefs(best.get(a)!, best.get(b)!) || a - b);
 
-  const refKey = new Map<number, string>();
-  for (const [c, r] of best) refKey.set(c, r.fullName);
-
-  const pinnedCommit = currentBranchCommit >= 0 ? currentBranchCommit : mainCommit >= 0 ? mainCommit : masterCommit;
   const sortedHeads = new Int32Array(withRef.length + noRef.length);
   sortedHeads.set(withRef, 0);
   sortedHeads.set(noRef, withRef.length);
-  return { sortedHeads, refKey, pinnedCommit };
+  return { sortedHeads };
 }
 
 export function buildLayout(g: CommitGraph, sortedHeads: Int32Array): GraphLayoutData {

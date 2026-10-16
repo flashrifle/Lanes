@@ -9,7 +9,7 @@
 // mode (collapseLongEdges=false shows every edge in full, without arrows).
 
 import type { GraphArrowElement, GraphEdgeElement, GraphRow } from '../types';
-import type { ColorOfLayout } from './colors';
+import type { LineColors } from './colors';
 import { EdgesInRow } from './edgesInRow';
 import type { VisibleGraph } from './visibleGraph';
 
@@ -44,7 +44,7 @@ type Arrow = (typeof Arrow)[keyof typeof Arrow];
 export class PrintElementGenerator {
   private readonly g: VisibleGraph;
   private readonly rowLayout: Int32Array;
-  private readonly colorOf: ColorOfLayout;
+  private readonly colors: LineColors;
   private readonly edgesInRow: EdgesInRow;
   private readonly longEdgeSize: number;
   private readonly visiblePartSize: number;
@@ -53,10 +53,10 @@ export class PrintElementGenerator {
   private readonly tmp: number[] = [];
   readonly maxLaneCount: number;
 
-  constructor(g: VisibleGraph, rowLayout: Int32Array, colorOf: ColorOfLayout, collapseLongEdges: boolean) {
+  constructor(g: VisibleGraph, rowLayout: Int32Array, colors: LineColors, collapseLongEdges: boolean) {
     this.g = g;
     this.rowLayout = rowLayout;
-    this.colorOf = colorOf;
+    this.colors = colors;
     this.edgesInRow = new EdgesInRow(g);
     this.longEdgeSize = collapseLongEdges ? LONG_EDGE_SIZE : Number.POSITIVE_INFINITY;
     this.visiblePartSize = LONG_EDGE_PART_SIZE;
@@ -169,11 +169,11 @@ export class PrintElementGenerator {
     return result;
   }
 
+  /** Same value for both halves of an edge (it depends only on the edge id). */
   private edgeColor(e: number): number {
-    const li = this.rowLayout;
-    const u = this.g.eUp[e];
-    const d = this.g.eDown[e];
-    return this.colorOf(d < 0 ? li[u] : Math.max(li[u], li[d]));
+    const { eUp, eDown, eDotted, rowCommit } = this.g;
+    const d = eDown[e];
+    return this.colors.edgeColor(rowCommit[eUp[e]], d < 0 ? -1 : rowCommit[d], eDotted[e] === 1);
   }
 
   getRow(row: number): GraphRow {
@@ -238,7 +238,7 @@ export class PrintElementGenerator {
     const result: GraphRow = {
       commitIndex: g.rowCommit[row],
       nodeLane,
-      nodeColor: this.colorOf(this.rowLayout[row]),
+      nodeColor: this.colors.nodeColor(g.rowCommit[row]),
       laneCount: maxLane + 1,
       edges,
       arrows,

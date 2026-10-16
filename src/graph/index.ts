@@ -3,10 +3,11 @@
 //
 // Pipeline: CommitGraph (CSR) -> heads + GraphLayout (layout indices) -> sort (normal | bek)
 // -> visible graph (filter with dotted edges) -> lazy PrintElementGenerator rows.
+// Colours: one per branch line (first-parent chain ownership), see colors.ts.
 
 import type { GraphLayout, GraphOptions, GraphRow, LogSnapshot } from '../types';
 import { bekSort } from './bek';
-import { createColorGetter } from './colors';
+import { computeLineColors } from './colors';
 import { buildCommitGraph } from './commitGraph';
 import { buildLayout, computeHeads } from './layout';
 import { PrintElementGenerator } from './printElements';
@@ -36,14 +37,9 @@ export function buildGraph(snapshot: LogSnapshot, options: GraphOptions): GraphL
   const rowLayout = new Int32Array(vg.rows);
   for (let r = 0; r < vg.rows; r++) rowLayout[r] = layout.layoutIndex[vg.rowCommit[r]];
 
-  const pinnedLayout = heads.pinnedCommit >= 0 ? layout.layoutIndex[heads.pinnedCommit] : -1;
-  const colorOf = createColorGetter(
-    layout,
-    (c) => heads.refKey.get(c) ?? snapshot.hashes[c] ?? String(c),
-    pinnedLayout,
-  );
+  const colors = computeLineColors(g, snapshot.parents, snapshot.hashes, snapshot.refs?.refs ?? []);
 
-  const gen = new PrintElementGenerator(vg, rowLayout, colorOf, options.collapseLongEdges);
+  const gen = new PrintElementGenerator(vg, rowLayout, colors, options.collapseLongEdges);
   const rowCount = vg.rows;
 
   const checkRow = (row: number) => {
