@@ -1,0 +1,15 @@
+Lanes
+Copyright 2026 flashrifle
+
+This product includes software derived from IntelliJ Platform Community Edition
+(https://github.com/JetBrains/intellij-community), Copyright 2000-2026 JetBrains s.r.o.,
+licensed under the Apache License, Version 2.0 (see licenses/Apache-2.0.txt).
+
+Ported portions (TypeScript re-implementations, modified) live in src/graph/ and are derived from:
+  platform/vcs-log/graph  (GraphLayoutBuilder, PermanentLinearGraphBuilder, PrintElementGeneratorImpl,
+                           EdgesInRowGenerator, GraphColorGetterByHead, BekSorter and related classes)
+  plugins/git4idea        (GitRefManager branch layout ordering)
+Each ported file carries a header describing its origin and modifications.
+
+Lanes is an independent project and is not affiliated with or endorsed by JetBrains.
+"JetBrains", "IntelliJ" and "WebStorm" are trademarks of JetBrains s.r.o.

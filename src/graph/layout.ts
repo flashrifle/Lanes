@@ -5,7 +5,7 @@
 // Copyright 2000-2024 JetBrains s.r.o. and contributors.
 // Licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
 // Modifications: TypeScript port; DFS is iterative over an Int32Array stack; head
-// comparator implemented from git-log-viewer ref priorities.
+// comparator implemented from Lanes ref priorities.
 
 import type { Ref } from '../types';
 import type { CommitGraph } from './commitGraph';

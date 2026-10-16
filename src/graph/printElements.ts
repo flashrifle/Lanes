@@ -4,7 +4,7 @@
 // intellij-community `platform/vcs-log/graph` (com.intellij.vcs.log.graph.impl.print).
 // Copyright 2000-2024 JetBrains s.r.o. and contributors.
 // Licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
-// Modifications: TypeScript port producing the git-log-viewer GraphRow contract; elements are
+// Modifications: TypeScript port producing the Lanes GraphRow contract; elements are
 // encoded as numbers (edge id >= 0, node = ~row); Map-based LRU caches; no "very long edge"
 // mode (collapseLongEdges=false shows every edge in full, without arrows).
 

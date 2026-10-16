@@ -1,9 +1,9 @@
-use git_log_viewer_lib::error::ErrorCode;
-use git_log_viewer_lib::git::refs::{Favorites, read_refs};
-use git_log_viewer_lib::git::{changes, diff, log, ops, repo};
-use git_log_viewer_lib::models::*;
-use git_log_viewer_lib::snapshot::{self, SnapshotStore};
-use git_log_viewer_lib::state::AppState;
+use lanes_lib::error::ErrorCode;
+use lanes_lib::git::refs::{Favorites, read_refs};
+use lanes_lib::git::{changes, diff, log, ops, repo};
+use lanes_lib::models::*;
+use lanes_lib::snapshot::{self, SnapshotStore};
+use lanes_lib::state::AppState;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -193,7 +193,7 @@ fn linear_history() {
     assert_eq!(sigs[0].status, SignatureStatus::None);
 
     // containing refs
-    assert_eq!(git_log_viewer_lib::git::refs::containing_refs(r.path(), &h1).unwrap(), vec!["refs/heads/main"]);
+    assert_eq!(lanes_lib::git::refs::containing_refs(r.path(), &h1).unwrap(), vec!["refs/heads/main"]);
 }
 
 #[test]
@@ -244,7 +244,7 @@ fn branch_and_merge() {
     );
 
     // containing branches
-    let cont = git_log_viewer_lib::git::refs::containing_refs(r.path(), &c2).unwrap();
+    let cont = lanes_lib::git::refs::containing_refs(r.path(), &c2).unwrap();
     assert_eq!(cont, vec!["refs/heads/feat", "refs/heads/main"]);
 }
 
@@ -717,7 +717,7 @@ fn load_finishing_after_close_is_dropped() {
     let r = TestRepo::new();
     r.commit_file("a.txt", "a\n", "c");
     let store = SnapshotStore::default();
-    let key = git_log_viewer_lib::git::repo::canonical_key(r.path());
+    let key = lanes_lib::git::repo::canonical_key(r.path());
     let gen_at_start = store.generation(&key);
     store.release_repo(r.path()); // tab closed while the load was in flight
     let id = store.next_id();
@@ -777,7 +777,7 @@ fn two_repos_watch_independently() {
     let state = AppState::new(None);
     let (tx, rx) = std::sync::mpsc::channel::<RepoChangedEvent>();
     let tx = std::sync::Mutex::new(tx);
-    let emit: git_log_viewer_lib::watcher::Emitter = Arc::new(move |ev| {
+    let emit: lanes_lib::watcher::Emitter = Arc::new(move |ev| {
         let _ = tx.lock().unwrap().send(ev);
     });
     state.open_repo(a.path(), emit.clone()).unwrap();

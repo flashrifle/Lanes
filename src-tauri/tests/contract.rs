@@ -1,7 +1,7 @@
 //! Writes one serialized sample per shared struct to tests/fixtures/contract/<Type>.json
 //! so the TS side can verify the key sets match `src/types.ts`.
-use git_log_viewer_lib::error::{AppError, ErrorCode};
-use git_log_viewer_lib::models::*;
+use lanes_lib::error::{AppError, ErrorCode};
+use lanes_lib::models::*;
 use serde::Serialize;
 use std::path::PathBuf;
 

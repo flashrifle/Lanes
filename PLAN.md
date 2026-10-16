@@ -1,4 +1,4 @@
-# git-log-viewer — Implementation Plan
+# Lanes — Implementation Plan
 
 Standalone macOS Tauri 2 app that reimplements the JetBrains IDE (WebStorm 2026.2) Git tool window **Log** tab.
 Produced by the ecc:planner agent; orchestrated by the main session.
@@ -27,7 +27,7 @@ Rust toolchain: `export PATH=/opt/homebrew/opt/rustup/bin:$PATH`.
 ## File ownership (strict)
 - orchestrator: `PLAN.md`, `src/types.ts`, `package.json`, `vite.config.ts`, `tsconfig*.json`, `src/contract.test.ts`.
 - graph-engine: `src/graph/**` (replaces the stub `src/graph/index.ts`).
-- git-backend: `src-tauri/**` incl. `Cargo.toml`, `tauri.conf.json` (window 1400×900, minWidth 900, title "Git Log"), capabilities.
+- git-backend: `src-tauri/**` incl. `Cargo.toml`, `tauri.conf.json` (window 1400×900, minWidth 900, title "Lanes"), capabilities.
 - ui-frontend: `src/ui/**`, `src/App.tsx`, `src/App.css`, `src/main.tsx`, `src/api.ts`.
 Need a new dependency? Report it instead of installing (except git-backend may edit Cargo.toml).
 

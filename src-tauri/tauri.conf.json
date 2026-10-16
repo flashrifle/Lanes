@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "git-log-viewer",
+  "productName": "Lanes",
   "version": "0.1.0",
-  "identifier": "io.jlab.gitlogviewer",
+  "identifier": "io.github.flashrifle.lanes",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Git Log",
+        "title": "Lanes",
         "width": 1400,
         "height": 900,
         "minWidth": 900
@@ -31,6 +31,12 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../NOTICE": "NOTICE",
+      "../licenses/Apache-2.0.txt": "licenses/Apache-2.0.txt"
+    },
+    "copyright": "Copyright 2026 flashrifle",
+    "category": "DeveloperTool"
   }
 }

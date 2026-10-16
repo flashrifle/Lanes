@@ -4,7 +4,7 @@
 // JetBrains intellij-community `platform/vcs-log/graph`.
 // Copyright 2000-2024 JetBrains s.r.o. and contributors.
 // Licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
-// Modifications: rewritten in TypeScript for git-log-viewer.
+// Modifications: rewritten in TypeScript for Lanes.
 
 export interface CommitGraph {
   readonly n: number;
