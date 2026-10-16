@@ -65,6 +65,9 @@ spctl -a -vv -t install Lanes_<ver>_universal.dmg   # Gatekeeper 확인
 | `src-tauri/` | Rust 백엔드 (git 실행, 저장소 감시, 상태 저장) |
 | `design/` | 앱 아이콘 원본 |
 
+## 라이선스
+[Apache License 2.0](LICENSE)을 따릅니다. Copyright 2026 flashrifle.
+
 ## 크레딧
 커밋 그래프 엔진은 IntelliJ Platform VCS 로그의 일부를 TypeScript로 옮긴 것입니다(Apache License 2.0).
 자세한 내용은 [NOTICE](NOTICE)를 참고하세요. Lanes는 JetBrains와 관련이 없는 독립 프로젝트입니다.
