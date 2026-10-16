@@ -119,14 +119,23 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
   const h = (side * Math.sqrt(3)) / 2;
   for (const ar of row.arrows) {
     const x = laneX(m, ar.lane);
-    const s = ar.dir === 'down' ? 1 : -1;
-    const tip = mid + (s * h) / 2;
-    const base = mid - (s * h) / 2;
+    // Point along the line that runs into the arrow (it often arrives diagonally), not straight up/down.
+    const incoming = row.edges.find((e) => e.lane === ar.lane && e.dir !== ar.dir && e.color === ar.color)
+      ?? row.edges.find((e) => e.lane === ar.lane && e.dir !== ar.dir);
+    let vx = 0, vy = ar.dir === 'down' ? 1 : -1;
+    if (incoming) {
+      const from = boundaryPoint(m, incoming);
+      const len = Math.hypot(x - from.x, mid - from.y) || 1;
+      vx = (x - from.x) / len; vy = (mid - from.y) / len;
+    }
+    const tipX = x + (vx * h) / 2, tipY = mid + (vy * h) / 2;
+    const bx = x - (vx * h) / 2, by = mid - (vy * h) / 2;
+    const px = -vy * (side / 2), py = vx * (side / 2);
     // Casing only on the two slanted sides: the base meets the incoming line and must not show a seam.
     ctx.beginPath();
-    ctx.moveTo(x - side / 2, base);
-    ctx.lineTo(x, tip);
-    ctx.lineTo(x + side / 2, base);
+    ctx.moveTo(bx + px, by + py);
+    ctx.lineTo(tipX, tipY);
+    ctx.lineTo(bx - px, by - py);
     ctx.lineJoin = 'miter';
     ctx.strokeStyle = casing;
     ctx.lineWidth = CASING * 2;
