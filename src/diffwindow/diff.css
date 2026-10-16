@@ -1,30 +1,33 @@
-/* Diff window (JetBrains New UI dark look). Everything scoped under .dw-* */
+/* Diff window (Lanes "Metro" look). Everything scoped under .dw-* */
 .dw-root {
-  --dw-bg: #1e1f22;
-  --dw-panel: #2b2d30;
-  --dw-border: #393b40;
-  --dw-text: #bcbec4;
-  --dw-text-hi: #dfe1e5;
-  --dw-muted: #6f737a;
-  --dw-ln: #4b5059;
-  --dw-accent: #548af7;
-  --dw-hover: #393b40;
+  --dw-bg: #14161D;
+  --dw-panel: #1A1D26;
+  --dw-border: #272B38;
+  --dw-text: #C9CEDD;
+  --dw-text-hi: #E8EAF2;
+  --dw-muted: #7C8396;
+  --dw-ln: #7C8396;
+  --dw-accent: #4C8DFF;
+  --dw-hover: #242938;
+  --dw-sel: #24304F;
 
-  --dw-mod: #233042;
-  --dw-mod-w: #34507a;
-  --dw-mod-edge: #3d5b85;
-  --dw-ins: #283a2c;
-  --dw-ins-w: #3b5f40;
-  --dw-ins-edge: #46744d;
-  --dw-del: #35373b;
-  --dw-del-w: #4e5157;
-  --dw-del-edge: #5d6067;
-  --dw-udel: #3d2e30;
-  --dw-udel-w: #643a3e;
-  --dw-udel-edge: #7a4449;
+  /* modified = blue-violet, inserted = green, deleted(left only) = neutral, deleted-with-counterpart = red */
+  --dw-mod: #1F2842;
+  --dw-mod-w: #3A4C86;
+  --dw-mod-edge: #4A5FA5;
+  --dw-ins: #17302A;
+  --dw-ins-w: #1F6B49;
+  --dw-ins-edge: #2A8A5D;
+  --dw-del: #262A38;
+  --dw-del-w: #3E4458;
+  --dw-del-edge: #4E556C;
+  --dw-udel: #3A1F28;
+  --dw-udel-w: #7A2F40;
+  --dw-udel-edge: #A0405A;
 
   --dw-mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --dw-font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+  --dw-font: "IBM Plex Sans KR", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+  --dw-display: "Archivo", "IBM Plex Sans KR", sans-serif;
 
   position: fixed;
   inset: 0;
@@ -37,7 +40,7 @@
   -webkit-user-select: none;
   color-scheme: dark;
 }
-body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
+body:has(.dw-root) { margin: 0; background: #14161D; overflow: hidden; }
 
 /* ───────── toolbar ───────── */
 .dw-toolbar {
@@ -58,15 +61,15 @@ body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
   width: 28px;
   height: 26px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 8px;
   background: transparent;
-  color: #ced0d6;
+  color: #D4D8E6;
   cursor: pointer;
   padding: 0;
 }
 .dw-btn:hover:not(:disabled) { background: var(--dw-hover); }
-.dw-btn:disabled { color: #5a5d63; cursor: default; }
-.dw-btn.on { background: #3a4354; color: #fff; }
+.dw-btn:disabled { color: #596077; cursor: default; }
+.dw-btn.on { background: #2B3D6B; color: #fff; }
 .dw-sep { width: 1px; height: 18px; background: var(--dw-border); margin: 0 6px; }
 .dw-filepos {
   border: 0;
@@ -80,12 +83,12 @@ body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
 }
 .dw-filepos:hover, .dw-filepos.on { background: var(--dw-hover); }
 .dw-grow { flex: 1; }
-.dw-hint { margin-left: 10px; color: #c9a26d; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dw-hint { margin-left: 10px; color: #E3B968; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dw-count { color: var(--dw-muted); margin-right: 10px; white-space: nowrap; }
 .dw-seg {
   display: inline-flex;
   border: 1px solid var(--dw-border);
-  border-radius: 6px;
+  border-radius: 999px;
   overflow: hidden;
   margin-right: 4px;
 }
@@ -98,17 +101,17 @@ body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
   cursor: pointer;
 }
 .dw-seg button + button { border-left: 1px solid var(--dw-border); }
-.dw-seg button.on { background: #3a4354; color: #fff; }
+.dw-seg button.on { background: #2B3D6B; color: #fff; }
 
 /* popovers */
 .dw-pop {
   position: absolute;
   top: 36px;
   z-index: 20;
-  background: #2b2d30;
-  border: 1px solid #43454a;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  background: #1A1D26;
+  border: 1px solid #272B38;
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
   padding: 5px;
   max-height: 60vh;
   overflow: auto;
@@ -131,13 +134,13 @@ body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
   white-space: nowrap;
 }
 .dw-pop-item:hover { background: var(--dw-hover); }
-.dw-pop-item.on { background: #2e436e; }
+.dw-pop-item.on { background: var(--dw-sel); }
 .dw-pop-dir { color: var(--dw-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
-.dw-st-added { color: #73bd79; }
-.dw-st-deleted { color: #8c8c8c; }
-.dw-st-modified { color: #6c9de8; }
-.dw-st-renamed, .dw-st-copied, .dw-st-typeChanged { color: #6c9de8; }
-.dw-pop-title { color: var(--dw-muted); font-size: 11px; padding: 4px 8px 2px; }
+.dw-st-added { color: #5FDC98; }
+.dw-st-deleted { color: #A3AABD; }
+.dw-st-modified { color: #86AEFF; }
+.dw-st-renamed, .dw-st-copied, .dw-st-typeChanged { color: #86AEFF; }
+.dw-pop-title { color: var(--dw-muted); font: 800 10px/1 var(--dw-display); letter-spacing: .12em; text-transform: uppercase; padding: 6px 8px 2px; }
 .dw-pop-check { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; cursor: pointer; color: var(--dw-text-hi); }
 .dw-pop-check:hover { background: var(--dw-hover); }
 .dw-pop-check.dw-disabled { color: var(--dw-muted); cursor: default; }
@@ -188,9 +191,9 @@ body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
   flex-shrink: 0;
   padding: 4px 12px;
   font-size: 12px;
-  background: #3d3423;
-  color: #e0c48a;
-  border-bottom: 1px solid #574a2f;
+  background: #3D3319;
+  color: #F0DB98;
+  border-bottom: 1px solid #574A25;
 }
 
 /* ───────── body ───────── */
@@ -202,7 +205,7 @@ body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
   text-align: center;
   padding: 24px;
 }
-.dw-placeholder.dw-err { color: #db5c5c; white-space: pre-wrap; }
+.dw-placeholder.dw-err { color: #FF7A85; white-space: pre-wrap; }
 
 .dw-viewer { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .dw-scroll {
@@ -254,10 +257,10 @@ body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
 .dw-ins { background: var(--dw-ins); }
 .dw-del { background: var(--dw-del); }
 .dw-udel { background: var(--dw-udel); }
-.dw-ln.dw-mod, .dw-ln.dw-ins, .dw-ln.dw-del, .dw-ln.dw-udel { color: #868a91; }
-.dw-fill.dw-mod { background: rgba(35, 48, 66, 0.45); }
-.dw-fill.dw-ins { background: rgba(40, 58, 44, 0.45); }
-.dw-fill.dw-del { background: rgba(53, 55, 59, 0.45); }
+.dw-ln.dw-mod, .dw-ln.dw-ins, .dw-ln.dw-del, .dw-ln.dw-udel { color: #9AA2B8; }
+.dw-fill.dw-mod { background: rgba(31, 40, 66, 0.45); }
+.dw-fill.dw-ins { background: rgba(23, 48, 42, 0.45); }
+.dw-fill.dw-del { background: rgba(38, 42, 56, 0.45); }
 .dw-fill.dw-ln { background: var(--dw-bg); }
 
 .dw-mod .dw-w { background: var(--dw-mod-w); border-radius: 2px; }
@@ -285,7 +288,7 @@ body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
 /* current change marker in the gutter */
 .dw-cur > .dw-ln-l { box-shadow: inset 2px 0 0 var(--dw-accent); }
 
-.dw-nonl { color: #c75450; margin-left: 4px; font-size: 11px; }
+.dw-nonl { color: #FF7A85; margin-left: 4px; font-size: 11px; }
 
 /* fold / gap rows */
 .dw-foldrow, .dw-gaprow {
@@ -296,16 +299,16 @@ body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
   height: 20px;
   border: 0;
   padding: 0 12px;
-  background: #25272a;
-  border-top: 1px dashed #3a3c41;
-  border-bottom: 1px dashed #3a3c41;
+  background: #181B24;
+  border-top: 1px dashed #303649;
+  border-bottom: 1px dashed #303649;
   box-sizing: border-box;
   color: var(--dw-muted);
   font: 12px var(--dw-font);
   text-align: left;
 }
 .dw-foldrow { cursor: pointer; }
-.dw-foldrow:hover { background: #2d3035; color: var(--dw-text); }
+.dw-foldrow:hover { background: #20253A; color: var(--dw-text); }
 .dw-fold-ico { font-weight: 700; color: var(--dw-accent); }
 
 /* horizontal bars */
@@ -313,8 +316,11 @@ body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
 .dw-hbar { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; height: 12px; font: 13px var(--dw-mono); }
 .dw-hbar > div { height: 1px; }
 .dw-hbar::-webkit-scrollbar { height: 10px; }
-.dw-hbar::-webkit-scrollbar-thumb { background: #4a4d52; border-radius: 5px; }
+.dw-hbar::-webkit-scrollbar-thumb { background: #343A4C; border-radius: 5px; }
 .dw-hbar::-webkit-scrollbar-track { background: transparent; }
 .dw-scroll::-webkit-scrollbar { width: 10px; }
-.dw-scroll::-webkit-scrollbar-thumb { background: #4a4d52; border-radius: 5px; }
+.dw-scroll::-webkit-scrollbar-thumb { background: #343A4C; border-radius: 5px; }
 .dw-scroll::-webkit-scrollbar-track { background: transparent; }
+
+.dw-root :focus-visible { outline: 2px solid var(--dw-accent); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .dw-root * { transition: none !important; animation: none !important; } }

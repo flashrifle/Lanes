@@ -9,14 +9,15 @@ import { Tooltip } from '../common/Tooltip';
 import { IS_MAC, hasMod } from '../platform';
 import { useRepo, useRepoStore } from '../state/repoContext';
 import { rowMapOf } from '../state/repoStore';
-import { GraphCell, colorOf } from './GraphCell';
+import { GraphCell } from './GraphCell';
+import { useMetrics } from './density';
+import { badgeOf } from './palette';
 import { buildRefLabels, refsByIndex, type RefLabel } from './refLabels';
-
-const ROW_H = 22;
 
 interface RowProps {
   row: number;
   top: number;
+  rowH: number;
   graph: GraphRow;
   meta: CommitMeta | undefined;
   labels: RefLabel[] | undefined;
@@ -26,26 +27,26 @@ interface RowProps {
   onContext: (e: React.MouseEvent, row: number) => void;
 }
 
-const Row = memo(function Row({ row, top, graph, meta, labels, sig, selected, focused, onContext }: RowProps) {
+const Row = memo(function Row({ row, top, rowH, graph, meta, labels, sig, selected, focused, onContext }: RowProps) {
   const merge = (meta?.parentCount ?? 0) > 1;
-  const color = colorOf(graph.nodeColor);
+  const badge = badgeOf(graph.nodeColor);
   return (
     <div
       className={'log-row' + (selected ? ' selected' : '') + (focused ? ' focused' : '') + (merge ? ' merge' : '')}
-      style={{ transform: `translateY(${top}px)`, height: ROW_H }}
+      style={{ transform: `translateY(${top}px)`, height: rowH }}
       data-row={row}
       onContextMenu={(e) => onContext(e, row)}
     >
       <div className="cell subject-cell">
-        <GraphCell row={graph} />
+        <GraphCell row={graph} selected={selected} />
         <span className="subject" title={meta?.subject}>{meta ? meta.subject : ''}</span>
         {labels && labels.length > 0 && (
-          <span className="chips">
+          <span className="badges">
             {labels.map((l) => (
               <span
                 key={l.fullNames.join('+')}
-                className={`chip ${l.kind}${l.isCurrent ? ' current' : ''}`}
-                style={{ ['--c' as string]: color }}
+                className={`badge ${l.kind}${l.isCurrent ? ' current' : ''}`}
+                style={{ ['--c' as string]: badge.bg, ['--ink' as string]: badge.ink }}
                 title={l.fullNames.join('\n')}
               >
                 {l.isFavorite && <Icon name="star" size={9} />}
@@ -84,6 +85,7 @@ export function LogTable() {
   const scrollRequest = useRepo((s) => s.scrollRequest);
   const loading = useRepo((s) => s.loading);
   const parentRef = useRef<HTMLDivElement>(null);
+  const ROW_H = useMetrics().rowH;
   const ctx = useContextMenu();
 
   const rowCount = layout?.rowCount ?? 0;
@@ -94,6 +96,17 @@ export function LogTable() {
     overscan: 20,
   });
   const items = virtualizer.getVirtualItems();
+
+  // Density change: row heights are derived from it, so re-measure and keep the top row anchored.
+  const prevRowH = useRef(ROW_H);
+  useEffect(() => {
+    if (prevRowH.current === ROW_H) return;
+    const topRow = Math.round((parentRef.current?.scrollTop ?? 0) / prevRowH.current);
+    prevRowH.current = ROW_H;
+    virtualizer.measure();
+    virtualizer.scrollToIndex(topRow, { align: 'start' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ROW_H]);
 
   const labelsByIndex = useMemo(() => {
     const out = new Map<number, RefLabel[]>();
@@ -197,6 +210,7 @@ export function LogTable() {
                   key={v.key}
                   row={v.index}
                   top={v.start}
+                  rowH={ROW_H}
                   graph={g}
                   meta={getMeta(ci)}
                   labels={labelsByIndex.get(ci)}

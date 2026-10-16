@@ -1,5 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
+import './assets/fonts/fonts.css';
 
 // The same bundle serves the main window and the separate diff window (index.html?diffSession=<id>).
 const App = lazy(() => import('./App'));

@@ -4,7 +4,11 @@ import { ContextMenu, useContextMenu } from '../common/ContextMenu';
 import { Icon } from '../common/Icons';
 import { Tooltip } from '../common/Tooltip';
 import { useRepo, useRepoStore } from '../state/repoContext';
-import { allGroupIds, buildBranchTree, flattenTree } from './branchTree';
+import { colorOf, MUTED_LINE } from '../log/palette';
+import { allGroupIds, buildBranchTree, flattenTree, type FlatRow } from './branchTree';
+
+const TAG_COLOR = '#F2B84B';
+const SECTION_TIP: Record<string, string> = { local: '로컬 브랜치 (노선)', remote: '리모트 브랜치', tags: '태그' };
 
 export function BranchPanel() {
   const store = useRepoStore();
@@ -18,7 +22,32 @@ export function BranchPanel() {
 
   const refs = snapshot?.refs.refs;
   const tree = useMemo(() => buildBranchTree(refs ?? [], query), [refs, query]);
-  const rows = useMemo(() => flattenTree(tree, collapsed, query.trim() !== ''), [tree, collapsed, query]);
+  const layout = useRepo((s) => s.layout);
+  // With a single remote its folder row is folded into the section title ("REMOTE · ORIGIN").
+  const soloRemote = useMemo(() => {
+    const rg = tree.find((n) => n.kind === 'group' && n.id === 'remote');
+    return rg && rg.kind === 'group' && rg.children.length === 1 && rg.children[0].kind === 'group' ? rg.children[0] : null;
+  }, [tree]);
+  const rows = useMemo(() => {
+    const col = soloRemote ? new Set([...collapsed].filter((x) => x !== soloRemote.id)) : collapsed;
+    const flat = flattenTree(tree, col, query.trim() !== '');
+    if (!soloRemote) return flat;
+    const out: FlatRow[] = [];
+    let skip = -1;
+    for (const r of flat) {
+      if (r.node.id === soloRemote.id) { skip = r.depth; continue; }
+      if (skip >= 0 && r.depth <= skip) skip = -1;
+      out.push(skip >= 0 ? { ...r, depth: r.depth - 1 } : r);
+    }
+    return out;
+  }, [tree, collapsed, query, soloRemote]);
+  /** Line colour per ref, taken from the graph so sidebar and graph always agree. */
+  const lineColor = (r: Ref): string => {
+    if (r.type === 'tag') return TAG_COLOR;
+    if (!layout || r.index == null) return MUTED_LINE;
+    const row = layout.rowOf(r.index);
+    return row < 0 ? MUTED_LINE : colorOf(layout.getRow(row).nodeColor);
+  };
   const selectedRef: Ref | null = useMemo(() => {
     const r = rows.find((x) => x.node.id === selId)?.node;
     return r && r.kind === 'ref' ? r.ref : null;
@@ -97,11 +126,21 @@ export function BranchPanel() {
           {rows.map(({ node, depth, expanded }) => {
             const pad = 8 + depth * 14;
             if (node.kind === 'group') {
+              const top = node.group === 'local' || node.group === 'remote' || node.group === 'tags';
+              const title = node.group === 'local' ? 'LINES' : node.group === 'tags' ? 'TAGS'
+                : node.group === 'remote' ? (soloRemote ? `REMOTE · ${soloRemote.label.toUpperCase()}` : 'REMOTE') : node.label;
               return (
-                <div key={node.id} className="bt-row group" style={{ paddingLeft: pad }} role="treeitem" onClick={() => toggle(node.id)}>
-                  <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={12} />
-                  {node.group === 'tags' ? <Icon name="tag" size={13} /> : <Icon name="folder" size={13} />}
-                  <span className="bt-label">{node.label}</span>
+                <div
+                  key={node.id}
+                  className={'bt-row group' + (top ? ' section' : '')}
+                  style={{ paddingLeft: top ? 10 : pad }}
+                  role="treeitem"
+                  aria-expanded={expanded}
+                  title={SECTION_TIP[node.group]}
+                  onClick={() => toggle(node.id)}
+                >
+                  <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={11} />
+                  <span className="bt-label">{title}</span>
                 </div>
               );
             }
@@ -111,18 +150,19 @@ export function BranchPanel() {
               <div
                 key={node.id}
                 className={'bt-row ref' + (selId === node.id ? ' selected' : '') + (r.isCurrent ? ' current' : '') + (inScope ? ' in-scope' : '')}
-                style={{ paddingLeft: pad + 14 }}
+                style={{ paddingLeft: node.kind === 'ref' && depth === 0 ? 12 : pad + 4 }}
                 role="treeitem"
                 onClick={() => { setSelId(node.id); jumpToCommitIndex(r.index); }}
                 onDoubleClick={() => { if (r.type !== 'head') setScopeRefs(inScope ? null : [r.fullName]); }}
                 onContextMenu={(e) => openMenu(e, r)}
                 title={r.fullName}
               >
-                <Icon name={r.type === 'head' ? 'head' : r.type === 'tag' ? 'tag' : 'branch'} size={13} />
+                <span className={'line-bar' + (r.type === 'tag' ? ' tag' : '')} style={{ background: lineColor(r) }} aria-hidden="true" />
                 <span className="bt-label">{node.label}</span>
                 {r.isFavorite && <Icon name="star" size={10} className="fav" />}
+                {r.isCurrent && r.type !== 'head' && <span className="bt-head" title="현재 체크아웃된 브랜치">HEAD</span>}
                 {(r.ahead || r.behind) ? (
-                  <span className="bt-track">{r.behind ? `↓${r.behind}` : ''}{r.ahead ? `↑${r.ahead}` : ''}</span>
+                  <span className="bt-track" title={`앞섬 ${r.ahead ?? 0} · 뒤처짐 ${r.behind ?? 0}`}>{r.ahead ? `↑${r.ahead}` : ''}{r.ahead && r.behind ? ' ' : ''}{r.behind ? `↓${r.behind}` : ''}</span>
                 ) : null}
               </div>
             );

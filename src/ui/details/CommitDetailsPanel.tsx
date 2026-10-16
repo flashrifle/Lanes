@@ -3,6 +3,7 @@ import { call, toAppError } from '../../api';
 import type { CommitDetails } from '../../types';
 import { formatFullDate } from '../format/date';
 import { buildRefLabels, refsByIndex } from '../log/refLabels';
+import { badgeOf, colorOf } from '../log/palette';
 import { Tooltip } from '../common/Tooltip';
 import { useRepo, useRepoStore } from '../state/repoContext';
 
@@ -45,6 +46,10 @@ export function CommitDetailsPanel() {
     return buildRefLabels(refsByIndex(snapshot.refs.refs).get(single) ?? []);
   }, [single, snapshot]);
 
+  const lineIdx = single != null && layout && layout.rowOf(single) >= 0 ? layout.getRow(layout.rowOf(single)).nodeColor : null;
+  const lineColor = lineIdx != null ? colorOf(lineIdx) : 'var(--muted)';
+  const badge = lineIdx != null ? badgeOf(lineIdx) : { bg: '#3A4157', ink: '#fff' };
+
   if (visibleSelected.length === 0) return <div className="details"><div className="empty-note">커밋을 선택하면 상세 정보가 표시됩니다</div></div>;
   if (visibleSelected.length > 1) return <div className="details"><div className="empty-note">{visibleSelected.length}개의 커밋이 선택됨</div></div>;
   if (error) return <div className="details"><div className="empty-note err">{error}</div></div>;
@@ -52,12 +57,17 @@ export function CommitDetailsPanel() {
 
   const d = details;
   const containingNames = (containing ?? []).map((f) => f.replace(/^refs\/(heads|remotes|tags)\//, ''));
+  const lineLabel = labels.find((l) => l.kind === 'local' || l.kind === 'head');
+  const lineName = lineLabel ? lineLabel.text.split(' & ').pop() : containingNames[0];
   const sameCommitter = d.committerEmail === d.authorEmail && d.committerTime === d.authorTime;
 
   return (
     <div className="details">
       <div className="details-scroll">
-        <div className="d-subject">{d.subject}</div>
+        <div className="d-card" style={{ borderLeftColor: lineColor }}>
+          <div className="d-eyebrow">{lineName ? `${lineName} 노선 · ` : ''}{d.hash.slice(0, 7)}</div>
+          <div className="d-subject">{d.subject}</div>
+        </div>
         {d.body && <pre className="d-body">{d.body}</pre>}
         <div className="d-meta">
           <Tooltip label="전체 해시 복사">
@@ -83,7 +93,7 @@ export function CommitDetailsPanel() {
         {labels.length > 0 && (
           <div className="d-meta">
             <span className="muted">참조: </span>
-            {labels.map((l) => <span key={l.text} className={`chip static ${l.kind}`}>{l.text}</span>)}
+            {labels.map((l) => <span key={l.text} className="badge" style={{ ['--c' as string]: badge.bg, ['--ink' as string]: badge.ink }}>{l.text}</span>)}
           </div>
         )}
         <div className="d-meta">

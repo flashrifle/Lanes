@@ -11,6 +11,7 @@ export function TabBar() {
   const labels = useMemo(() => tabLabels(tabs), [tabs]);
   return (
     <div className="tab-bar" role="tablist" aria-label="열린 저장소">
+      <span className="wordmark" aria-hidden="true">LANES</span>
       {tabs.map((t, i) => {
         const active = t.id === activeId;
         return (

@@ -13,3 +13,8 @@ Each ported file carries a header describing its origin and modifications.
 
 Lanes is an independent project and is not affiliated with or endorsed by JetBrains.
 "JetBrains", "IntelliJ" and "WebStorm" are trademarks of JetBrains s.r.o.
+
+Bundled fonts (SIL Open Font License 1.1; full texts in licenses/fonts-OFL.txt):
+  IBM Plex Sans KR — Copyright 2018 IBM Corp.
+  Archivo          — Copyright 2020 The Archivo Project Authors
+  JetBrains Mono   — Copyright 2020 The JetBrains Mono Project Authors

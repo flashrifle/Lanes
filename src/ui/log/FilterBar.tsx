@@ -6,6 +6,8 @@ import { datePresetRange, parseDateInput, type DatePreset } from '../state/logic
 import { Tooltip } from '../common/Tooltip';
 import { useRepo, useRepoStore } from '../state/repoContext';
 import { modKey } from '../platform';
+import { DENSITIES, DENSITY_LABEL, setDensity, useDensity, type Density } from './density';
+import { colorOf, MUTED_LINE } from './palette';
 
 const SORTS: { id: GraphSortType; label: string }[] = [
   { id: 'bek', label: '표준 (BEK)' },
@@ -38,6 +40,8 @@ export function FilterBar() {
   const repo = useRepo((s) => s.repo);
   const sort = useRepo((s) => s.sort);
   const loading = useRepo((s) => s.loading);
+  const layout = useRepo((s) => s.layout);
+  const density = useDensity();
 
   const [text, setText] = useState(filterUi.text.text);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -69,7 +73,12 @@ export function FilterBar() {
 
   const refs = snapshot?.refs.refs ?? [];
   const shortOf = (full: string) => refs.find((r) => r.fullName === full)?.name ?? full.replace(/^refs\/(heads|remotes|tags)\//, '');
-  const branchLabel = scopeRefs ? `브랜치: ${scopeRefs.map(shortOf).join(', ')}` : '브랜치';
+  const branchLabel = scopeRefs ? `브랜치 ${scopeRefs.length}` : '브랜치';
+  const dotOf = (full: string): string => {
+    const r = refs.find((x) => x.fullName === full);
+    const row = r?.index != null && layout ? layout.rowOf(r.index) : -1;
+    return row >= 0 && layout ? colorOf(layout.getRow(row).nodeColor) : MUTED_LINE;
+  };
   const selectable = refs.filter((r) => r.type === 'head' || r.type === 'localBranch' || r.type === 'remoteBranch');
   const toggleScope = (full: string) => {
     const cur = scopeRefs ?? [];
@@ -118,7 +127,7 @@ export function FilterBar() {
         </Tooltip>
       </div>
 
-      <Dropdown label={branchLabel} active={!!scopeRefs} onClear={() => setScopeRefs(null)} title="브랜치 필터">
+      <Dropdown label={branchLabel} active={!!scopeRefs} title="브랜치 필터">
         {() => (
           <div className="pop-list">
             <label className="pop-item"><input type="radio" checked={!scopeRefs} onChange={() => setScopeRefs(null)} />모든 브랜치</label>
@@ -132,6 +141,18 @@ export function FilterBar() {
           </div>
         )}
       </Dropdown>
+
+      {scopeRefs && scopeRefs.map((full) => (
+        <span key={full} className="chip" title={full}>
+          <i className="chip-dot" style={{ background: dotOf(full) }} />
+          <span className="chip-text">{shortOf(full)}</span>
+          <Tooltip label="이 브랜치 필터 제거" side="bottom">
+            <button className="chip-x" aria-label={`${shortOf(full)} 필터 제거`} onClick={() => { const n = scopeRefs.filter((x) => x !== full); setScopeRefs(n.length ? n : null); }}>
+              <Icon name="close" size={9} />
+            </button>
+          </Tooltip>
+        </span>
+      ))}
 
       <Dropdown label={users ? `사용자: ${users.length === 1 ? users[0] : users.length + '명'}` : '사용자'} active={!!users} onClear={() => setUsers(null)} title="사용자 필터">
         {() => (
@@ -195,12 +216,21 @@ export function FilterBar() {
 
       <div className="grow" />
 
-      <Dropdown label={<Icon name="sort" size={14} />} title={`정렬: ${SORTS.find((s) => s.id === sort)?.label}`} align="right">
+      <Dropdown label={<Icon name="sort" size={14} />} title={`정렬 · 행 높이: ${SORTS.find((s) => s.id === sort)?.label} · ${DENSITY_LABEL[density]}`} align="right">
         {(close) => (
           <div className="pop-list">
+            <div className="pop-title">정렬</div>
             {SORTS.map((s) => (
               <label key={s.id} className="pop-item">
                 <input type="radio" checked={sort === s.id} onChange={() => { setSort(s.id); close(); }} />{s.label}
+              </label>
+            ))}
+            <div className="pop-sep" />
+            <div className="pop-title">행 높이</div>
+            {(Object.keys(DENSITIES) as Density[]).map((d) => (
+              <label key={d} className="pop-item">
+                <input type="radio" checked={density === d} onChange={() => { setDensity(d); close(); }} />
+                {DENSITY_LABEL[d]}<span className="muted grow" style={{ textAlign: 'right' }}>{DENSITIES[d].rowH}px</span>
               </label>
             ))}
           </div>
