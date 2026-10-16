@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './Icons';
+import { Tooltip } from './Tooltip';
 
 interface Props {
   label: ReactNode;
@@ -24,15 +25,19 @@ export function Dropdown({ label, active, onClear, title, children, align = 'lef
   }, [open]);
   return (
     <div className="dd" ref={ref}>
-      <div className={'dd-btn' + (active ? ' active' : '') + (open ? ' open' : '')} title={title}>
-        <button className="dd-main" onClick={() => setOpen((o) => !o)}>
-          <span className="dd-label">{label}</span>
-          {!(active && onClear) && <Icon name="chevronDown" size={12} />}
-        </button>
-        {active && onClear && (
-          <button className="dd-clear" title="지우기" onClick={() => { onClear(); setOpen(false); }}>
-            <Icon name="close" size={10} />
+      <div className={'dd-btn' + (active ? ' active' : '') + (open ? ' open' : '')}>
+        <Tooltip label={title ?? '필터'} side="bottom">
+          <button className="dd-main" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+            <span className="dd-label">{label}</span>
+            {!(active && onClear) && <Icon name="chevronDown" size={12} />}
           </button>
+        </Tooltip>
+        {active && onClear && (
+          <Tooltip label="필터 지우기" side="bottom">
+            <button className="dd-clear" onClick={() => { onClear(); setOpen(false); }}>
+              <Icon name="close" size={10} />
+            </button>
+          </Tooltip>
         )}
       </div>
       {open && <div className={'dd-pop ' + align}>{children(() => setOpen(false))}</div>}

@@ -3,13 +3,16 @@ import { call, toAppError } from '../../api';
 import type { CommitDetails } from '../../types';
 import { formatFullDate } from '../format/date';
 import { buildRefLabels, refsByIndex } from '../log/refLabels';
-import { jumpToHash, showToast, useStore } from '../state/store';
+import { Tooltip } from '../common/Tooltip';
+import { useRepo, useRepoStore } from '../state/repoContext';
 
 export function CommitDetailsPanel() {
-  const repo = useStore((s) => s.repo);
-  const snapshot = useStore((s) => s.snapshot);
-  const selection = useStore((s) => s.selection);
-  const layout = useStore((s) => s.layout);
+  const store = useRepoStore();
+  const { jumpToHash, showToast } = store;
+  const repo = useRepo((s) => s.repo);
+  const snapshot = useRepo((s) => s.snapshot);
+  const selection = useRepo((s) => s.selection);
+  const layout = useRepo((s) => s.layout);
 
   const visibleSelected = useMemo(
     () => [...selection.set].filter((i) => (layout ? layout.rowOf(i) >= 0 : false)),
@@ -57,9 +60,11 @@ export function CommitDetailsPanel() {
         <div className="d-subject">{d.subject}</div>
         {d.body && <pre className="d-body">{d.body}</pre>}
         <div className="d-meta">
-          <button className="hash-link" title="해시 복사" onClick={() => { void navigator.clipboard?.writeText(d.hash); showToast('info', '해시를 복사했습니다'); }}>
-            {d.hash.slice(0, 10)}
-          </button>
+          <Tooltip label="전체 해시 복사">
+            <button className="hash-link" onClick={() => { void navigator.clipboard?.writeText(d.hash); showToast('info', '해시를 복사했습니다'); }}>
+              {d.hash.slice(0, 10)}
+            </button>
+          </Tooltip>
           <span> {d.authorName} </span>
           <span className="muted">&lt;{d.authorEmail}&gt;</span>
           <span className="muted"> · {formatFullDate(d.authorTime)}</span>
@@ -71,7 +76,7 @@ export function CommitDetailsPanel() {
           <div className="d-meta">
             <span className="muted">부모: </span>
             {d.parents.map((p) => (
-              <button key={p} className="hash-link" onClick={() => jumpToHash(p)}>{p.slice(0, 10)}</button>
+              <Tooltip key={p} label="부모 커밋으로 이동"><button className="hash-link" onClick={() => jumpToHash(p)}>{p.slice(0, 10)}</button></Tooltip>
             ))}
           </div>
         )}

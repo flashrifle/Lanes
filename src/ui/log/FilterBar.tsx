@@ -3,7 +3,9 @@ import type { GraphSortType } from '../../types';
 import { Dropdown } from '../common/Dropdown';
 import { Icon } from '../common/Icons';
 import { datePresetRange, parseDateInput, type DatePreset } from '../state/logic';
-import { reload, setDateRange, setPaths, setScopeRefs, setSort, setTextFilter, setUsers, useStore } from '../state/store';
+import { Tooltip } from '../common/Tooltip';
+import { useRepo, useRepoStore } from '../state/repoContext';
+import { modKey } from '../platform';
 
 const SORTS: { id: GraphSortType; label: string }[] = [
   { id: 'bek', label: '표준 (BEK)' },
@@ -26,28 +28,41 @@ function toDateInput(ts: number | null): string {
 }
 
 export function FilterBar() {
-  const filterUi = useStore((s) => s.filterUi);
-  const filterError = useStore((s) => s.filterError);
-  const scopeRefs = useStore((s) => s.scopeRefs);
-  const snapshot = useStore((s) => s.snapshot);
-  const authors = useStore((s) => s.authors);
-  const repo = useStore((s) => s.repo);
-  const sort = useStore((s) => s.sort);
-  const loading = useStore((s) => s.loading);
+  const store = useRepoStore();
+  const { reload, setDateRange, setPaths, setScopeRefs, setSort, setTextFilter, setUsers } = store;
+  const filterUi = useRepo((s) => s.filterUi);
+  const filterError = useRepo((s) => s.filterError);
+  const scopeRefs = useRepo((s) => s.scopeRefs);
+  const snapshot = useRepo((s) => s.snapshot);
+  const authors = useRepo((s) => s.authors);
+  const repo = useRepo((s) => s.repo);
+  const sort = useRepo((s) => s.sort);
+  const loading = useRepo((s) => s.loading);
 
   const [text, setText] = useState(filterUi.text.text);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const first = useRef(true);
   const regex = filterUi.text.regex;
   const matchCase = filterUi.text.matchCase;
+  // The debounced timer must see the *current* flags, not the ones captured when it was scheduled.
+  const flags = useRef({ regex, matchCase });
+  flags.current = { regex, matchCase };
+  const textRef = useRef(text);
+  textRef.current = text;
 
   useEffect(() => {
     if (first.current) { first.current = false; return; }
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => setTextFilter({ text, regex, matchCase }), 300);
+    timer.current = setTimeout(() => setTextFilter({ text: textRef.current, ...flags.current }), 300);
     return () => clearTimeout(timer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
+
+  /** Flag toggles apply immediately (with the current text) and cancel any pending debounced edit. */
+  const toggleFlag = (patch: Partial<{ regex: boolean; matchCase: boolean }>) => {
+    clearTimeout(timer.current);
+    setTextFilter({ text: textRef.current, ...flags.current, ...patch });
+  };
 
   // external reset (e.g. repo switch)
   useEffect(() => { if (filterUi.text.text === '' && text !== '') setText(''); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filterUi.text.text]);
@@ -90,11 +105,17 @@ export function FilterBar() {
           value={text}
           placeholder="텍스트 또는 해시"
           spellCheck={false}
+          aria-label="커밋 검색"
+          aria-invalid={filterError}
           title={filterError ? '잘못된 정규식입니다 (Rust regex 문법)' : undefined}
           onChange={(e) => setText(e.target.value)}
         />
-        <button className={'toggle' + (regex ? ' on' : '')} title="정규식" onClick={() => setTextFilter({ text, regex: !regex, matchCase })}>.*</button>
-        <button className={'toggle' + (matchCase ? ' on' : '')} title="대소문자 구분" onClick={() => setTextFilter({ text, regex, matchCase: !matchCase })}>Cc</button>
+        <Tooltip label={regex ? '정규식 사용 중 (클릭하여 끄기)' : '정규식으로 검색'}>
+          <button className={'toggle' + (regex ? ' on' : '')} aria-pressed={regex} onClick={() => toggleFlag({ regex: !regex })}>.*</button>
+        </Tooltip>
+        <Tooltip label={matchCase ? '대/소문자 구분 중 (클릭하여 끄기)' : '대/소문자 구분'}>
+          <button className={'toggle' + (matchCase ? ' on' : '')} aria-pressed={matchCase} onClick={() => toggleFlag({ matchCase: !matchCase })}>Cc</button>
+        </Tooltip>
       </div>
 
       <Dropdown label={branchLabel} active={!!scopeRefs} onClear={() => setScopeRefs(null)} title="브랜치 필터">
@@ -163,7 +184,9 @@ export function FilterBar() {
             {(paths ?? []).map((p) => (
               <div key={p} className="pop-item">
                 <span className="grow">{p}</span>
-                <button className="icon-btn" onClick={() => { const n = (paths ?? []).filter((x) => x !== p); setPaths(n.length ? n : null); }}><Icon name="close" size={10} /></button>
+                <Tooltip label="이 경로 제거" side="left">
+                  <button className="icon-btn" onClick={() => { const n = (paths ?? []).filter((x) => x !== p); setPaths(n.length ? n : null); }}><Icon name="close" size={10} /></button>
+                </Tooltip>
               </div>
             ))}
           </div>
@@ -183,9 +206,11 @@ export function FilterBar() {
           </div>
         )}
       </Dropdown>
-      <button className={'icon-btn' + (loading ? ' spin' : '')} title="새로고침" onClick={() => void reload()}>
-        <Icon name="refresh" size={14} />
-      </button>
+      <Tooltip label="새로 고침" shortcut={modKey('R')}>
+        <button className={'icon-btn' + (loading ? ' spin' : '')} onClick={() => void reload()}>
+          <Icon name="refresh" size={14} />
+        </button>
+      </Tooltip>
     </div>
   );
 }

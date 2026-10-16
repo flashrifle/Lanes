@@ -5,10 +5,10 @@ import { formatCommitDate, formatFullDate } from '../format/date';
 import { ContextMenu, useContextMenu } from '../common/ContextMenu';
 import { Icon } from '../common/Icons';
 import { currentFocusRow } from '../state/logic';
-import {
-  checkoutCommit, ensureMeta, ensureSignatures, getMeta, getSignature, moveFocus, openDialog, rowMapOf,
-  selectAllRows, selectRowAt, setTopCommitIndex, useStore,
-} from '../state/store';
+import { Tooltip } from '../common/Tooltip';
+import { IS_MAC, hasMod } from '../platform';
+import { useRepo, useRepoStore } from '../state/repoContext';
+import { rowMapOf } from '../state/repoStore';
 import { GraphCell, colorOf } from './GraphCell';
 import { buildRefLabels, refsByIndex, type RefLabel } from './refLabels';
 
@@ -62,9 +62,11 @@ const Row = memo(function Row({ row, top, graph, meta, labels, sig, selected, fo
       </div>
       <div className="cell status">
         {sig && sig.status !== 'none' && (
-          <span className={'sig ' + (sig.status === 'good' ? 'good' : 'bad')} title={`서명: ${sig.status}${sig.signer ? ' (' + sig.signer + ')' : ''}`}>
-            <Icon name={sig.status === 'good' ? 'check' : 'warning'} size={12} />
-          </span>
+          <Tooltip side="left" label={`서명: ${sig.status}${sig.signer ? ' (' + sig.signer + ')' : ''}`}>
+            <span className={'sig ' + (sig.status === 'good' ? 'good' : 'bad')}>
+              <Icon name={sig.status === 'good' ? 'check' : 'warning'} size={12} />
+            </span>
+          </Tooltip>
         )}
       </div>
     </div>
@@ -72,13 +74,15 @@ const Row = memo(function Row({ row, top, graph, meta, labels, sig, selected, fo
 });
 
 export function LogTable() {
-  const layout = useStore((s) => s.layout);
-  const snapshot = useStore((s) => s.snapshot);
-  const selection = useStore((s) => s.selection);
-  const metaVersion = useStore((s) => s.metaVersion);
-  const sigVersion = useStore((s) => s.sigVersion);
-  const scrollRequest = useStore((s) => s.scrollRequest);
-  const loading = useStore((s) => s.loading);
+  const store = useRepoStore();
+  const { checkoutCommit, ensureMeta, ensureSignatures, getMeta, getSignature, moveFocus, openDialog, selectAllRows, selectRowAt, setTopCommitIndex } = store;
+  const layout = useRepo((s) => s.layout);
+  const snapshot = useRepo((s) => s.snapshot);
+  const selection = useRepo((s) => s.selection);
+  const metaVersion = useRepo((s) => s.metaVersion);
+  const sigVersion = useRepo((s) => s.sigVersion);
+  const scrollRequest = useRepo((s) => s.scrollRequest);
+  const loading = useRepo((s) => s.loading);
   const parentRef = useRef<HTMLDivElement>(null);
   const ctx = useContextMenu();
 
@@ -116,7 +120,7 @@ export function LogTable() {
       void ensureSignatures(hashes);
     }, 30);
     return () => clearTimeout(t);
-  }, [layout, snapshot, first, last, metaVersion]);
+  }, [layout, snapshot, first, last, metaVersion, ensureMeta, ensureSignatures, setTopCommitIndex]);
 
   useEffect(() => {
     if (!scrollRequest) return;
@@ -142,7 +146,7 @@ export function LogTable() {
       case 'End': target = rowCount - 1; break;
       case 'a':
       case 'A':
-        if (e.metaKey || e.ctrlKey) { e.preventDefault(); selectAllRows(); }
+        if (hasMod(e)) { e.preventDefault(); selectAllRows(); }
         return;
       default: return;
     }
@@ -165,9 +169,10 @@ export function LogTable() {
 
   const onRowClick = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    if (IS_MAC && e.ctrlKey) return; // ctrl+click is a context-menu gesture on macOS
     const el = (e.target as HTMLElement).closest('[data-row]') as HTMLElement | null;
     if (!el) return;
-    selectRowAt(Number(el.dataset.row), { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey });
+    selectRowAt(Number(el.dataset.row), { shift: e.shiftKey, toggle: hasMod(e) });
   };
 
   void sigVersion;

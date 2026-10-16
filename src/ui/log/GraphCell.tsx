@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useRef, useSyncExternalStore } from 'react';
 import type { GraphRow } from '../../types';
 
 export const LANE_W = 14;
@@ -48,19 +48,38 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow): void
   ctx.fill();
 }
 
+// One shared subscription: re-render canvases when devicePixelRatio changes (window moved between displays, zoom).
+const dprListeners = new Set<() => void>();
+let dprMql: MediaQueryList | null = null;
+const onDprChange = () => { armDprWatch(); dprListeners.forEach((l) => l()); };
+function armDprWatch(): void {
+  dprMql?.removeEventListener('change', onDprChange);
+  dprMql = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+  dprMql.addEventListener('change', onDprChange, { once: true });
+}
+function subscribeDpr(l: () => void): () => void {
+  if (dprListeners.size === 0 && typeof window.matchMedia === 'function') armDprWatch();
+  dprListeners.add(l);
+  return () => {
+    dprListeners.delete(l);
+    if (dprListeners.size === 0) { dprMql?.removeEventListener('change', onDprChange); dprMql = null; }
+  };
+}
+const getDpr = (): number => window.devicePixelRatio || 1;
+
 export const GraphCell = memo(function GraphCell({ row }: { row: GraphRow }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const w = graphWidth(row.laneCount);
+  const dpr = useSyncExternalStore(subscribeDpr, getDpr);
   useEffect(() => {
     const c = ref.current;
     const ctx = c?.getContext('2d');
     if (!c || !ctx) return;
-    const dpr = window.devicePixelRatio || 1;
     c.width = Math.round(w * dpr);
     c.height = Math.round(ROW_H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, ROW_H);
     drawGraphRow(ctx, row);
-  }, [row, w]);
+  }, [row, w, dpr]);
   return <canvas ref={ref} className="graph-cell" style={{ width: w, height: ROW_H }} />;
 });

@@ -2,14 +2,15 @@ import { useMemo, useState } from 'react';
 import type { Ref } from '../../types';
 import { ContextMenu, useContextMenu } from '../common/ContextMenu';
 import { Icon } from '../common/Icons';
-import {
-  checkoutRef, deleteBranch, fetchAll, jumpToCommitIndex, openDialog, pull, setScopeRefs, toggleFavorite, useStore,
-} from '../state/store';
+import { Tooltip } from '../common/Tooltip';
+import { useRepo, useRepoStore } from '../state/repoContext';
 import { allGroupIds, buildBranchTree, flattenTree } from './branchTree';
 
 export function BranchPanel() {
-  const snapshot = useStore((s) => s.snapshot);
-  const scopeRefs = useStore((s) => s.scopeRefs);
+  const store = useRepoStore();
+  const { checkoutRef, deleteBranch, fetchAll, jumpToCommitIndex, openDialog, pull, setScopeRefs, toggleFavorite } = store;
+  const snapshot = useRepo((s) => s.snapshot);
+  const scopeRefs = useRepo((s) => s.scopeRefs);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [selId, setSelId] = useState<string | null>(null);
@@ -45,24 +46,41 @@ export function BranchPanel() {
     ]);
   };
 
+  const favDisabled = !selectedRef || selectedRef.type === 'head' || selectedRef.type === 'tag';
+  const favLabel = favDisabled
+    ? '즐겨찾기 (브랜치를 선택하세요)'
+    : selectedRef.isFavorite ? `'${selectedRef.name}'을(를) 즐겨찾기에서 제거` : `'${selectedRef.name}'을(를) 즐겨찾기에 추가`;
+  const newBranchFrom = selectedRef && selectedRef.type !== 'head' ? selectedRef.name : 'HEAD';
+
   const tools = (
-    <div className="branch-tools">
-      <button className="icon-btn" title="새 브랜치" onClick={() => openDialog({ kind: 'createBranch', startPoint: selectedRef && selectedRef.type !== 'head' ? selectedRef.name : 'HEAD', startLabel: selectedRef?.name ?? 'HEAD' })}>
-        <Icon name="plus" size={15} />
-      </button>
-      <button className="icon-btn" title="모두 가져오기 (Fetch)" onClick={() => void fetchAll()}><Icon name="download" size={15} /></button>
-      <button className="icon-btn" title="풀 (Pull)" onClick={() => void pull('ffOnly')}><Icon name="pull" size={15} /></button>
-      <button
-        className="icon-btn"
-        title="즐겨찾기 토글"
-        disabled={!selectedRef || selectedRef.type === 'head' || selectedRef.type === 'tag'}
-        onClick={() => selectedRef && void toggleFavorite(selectedRef)}
-      >
-        <Icon name={selectedRef?.isFavorite ? 'star' : 'starOutline'} size={15} />
-      </button>
+    <div className="branch-tools" role="toolbar" aria-orientation="vertical" aria-label="브랜치 도구">
+      <Tooltip side="right" label={`'${newBranchFrom}'에서 새 브랜치 만들기…`}>
+        <button className="icon-btn" onClick={() => openDialog({ kind: 'createBranch', startPoint: newBranchFrom, startLabel: newBranchFrom })}>
+          <Icon name="plus" size={15} />
+        </button>
+      </Tooltip>
+      <Tooltip side="right" label="모든 리모트에서 가져오기 (Fetch)">
+        <button className="icon-btn" onClick={() => void fetchAll()}><Icon name="download" size={15} /></button>
+      </Tooltip>
+      <Tooltip side="right" label="현재 브랜치 풀 (Pull)">
+        <button className="icon-btn" onClick={() => void pull('ffOnly')}><Icon name="pull" size={15} /></button>
+      </Tooltip>
+      <Tooltip side="right" label={favLabel}>
+        <button
+          className="icon-btn"
+          aria-disabled={favDisabled}
+          onClick={() => { if (!favDisabled && selectedRef) void toggleFavorite(selectedRef); }}
+        >
+          <Icon name={selectedRef?.isFavorite ? 'star' : 'starOutline'} size={15} />
+        </button>
+      </Tooltip>
       <div className="tools-sep" />
-      <button className="icon-btn" title="모두 접기" onClick={() => setCollapsed(new Set(allGroupIds(tree)))}><Icon name="collapse" size={15} /></button>
-      <button className="icon-btn" title="모두 펼치기" onClick={() => setCollapsed(new Set())}><Icon name="expand" size={15} /></button>
+      <Tooltip side="right" label="모두 접기">
+        <button className="icon-btn" onClick={() => setCollapsed(new Set(allGroupIds(tree)))}><Icon name="collapse" size={15} /></button>
+      </Tooltip>
+      <Tooltip side="right" label="모두 펼치기">
+        <button className="icon-btn" onClick={() => setCollapsed(new Set())}><Icon name="expand" size={15} /></button>
+      </Tooltip>
     </div>
   );
 
@@ -73,7 +91,7 @@ export function BranchPanel() {
         <div className="branch-search">
           <Icon name="search" size={13} />
           <input value={query} placeholder="브랜치 또는 태그" spellCheck={false} onChange={(e) => setQuery(e.target.value)} />
-          {query && <button className="icon-btn" onClick={() => setQuery('')}><Icon name="close" size={10} /></button>}
+          {query && <Tooltip side="bottom" label="검색어 지우기"><button className="icon-btn" onClick={() => setQuery('')}><Icon name="close" size={10} /></button></Tooltip>}
         </div>
         <div className="branch-tree" role="tree">
           {rows.map(({ node, depth, expanded }) => {

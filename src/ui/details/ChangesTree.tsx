@@ -3,7 +3,8 @@ import { call, toAppError } from '../../api';
 import type { ChangedFile, ChangesResult } from '../../types';
 import { FileIcon, Icon } from '../common/Icons';
 import { selectedInRowOrder } from '../state/logic';
-import { openDiff, rowMapOf, useStore } from '../state/store';
+import { useRepo, useRepoStore } from '../state/repoContext';
+import { rowMapOf } from '../state/repoStore';
 import { buildFileTree, fileExt, type FileTreeNode } from './fileTree';
 
 const STATUS_CLASS: Record<ChangedFile['status'], string> = {
@@ -11,25 +12,30 @@ const STATUS_CLASS: Record<ChangedFile['status'], string> = {
   typeChanged: 'st-modified', unmerged: 'st-deleted', unknown: '',
 };
 
+/** Selecting more commits than this (e.g. Cmd+A on a huge log) is not sent to the backend. */
+export const MAX_CHANGES_COMMITS = 500;
+
 export function ChangesTree() {
-  const repo = useStore((s) => s.repo);
-  const snapshot = useStore((s) => s.snapshot);
-  const layout = useStore((s) => s.layout);
-  const selection = useStore((s) => s.selection);
+  const { openDiff } = useRepoStore();
+  const repo = useRepo((s) => s.repo);
+  const snapshot = useRepo((s) => s.snapshot);
+  const layout = useRepo((s) => s.layout);
+  const selection = useRepo((s) => s.selection);
   const [result, setResult] = useState<ChangesResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [selPath, setSelPath] = useState<string | null>(null);
 
+  const tooMany = selection.set.size > MAX_CHANGES_COMMITS;
   const hashes = useMemo(() => {
-    if (!snapshot) return [] as string[];
+    if (!snapshot || tooMany) return [] as string[];
     return selectedInRowOrder(selection, rowMapOf(layout)).map((i) => snapshot.hashes[i]);
-  }, [snapshot, layout, selection]);
-  const key = hashes.join(',');
+  }, [snapshot, layout, selection, tooMany]);
+  const key = useMemo(() => hashes.join(','), [hashes]);
 
   useEffect(() => {
-    if (!repo || hashes.length === 0) { setResult(null); setError(null); return; }
+    if (!repo || hashes.length === 0) { setResult(null); setError(null); setBusy(false); return; }
     let cancelled = false;
     setBusy(true);
     const t = setTimeout(() => {
@@ -96,7 +102,8 @@ export function ChangesTree() {
         {busy && <span className="muted"> …</span>}
       </div>
       <div className="changes-body">
-        {hashes.length === 0 && <div className="empty-note">커밋을 선택하세요</div>}
+        {tooMany && <div className="empty-note">{selection.set.size.toLocaleString('ko-KR')}개의 커밋이 선택됨 — 변경 사항을 표시하기에 너무 많습니다</div>}
+        {!tooMany && hashes.length === 0 && <div className="empty-note">커밋을 선택하세요</div>}
         {error && <div className="empty-note err">{error}</div>}
         {result && count === 0 && <div className="empty-note">변경된 파일이 없습니다</div>}
         {tree.map((n) => renderNode(n, 0))}

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { call } from '../../api';
-import { closeDialog, createBranch, useStore } from '../state/store';
+import { useRepo, useRepoStore } from '../state/repoContext';
 
 export function CreateBranchDialog({ startPoint, startLabel }: { startPoint: string; startLabel: string }) {
-  const repo = useStore((s) => s.repo);
+  const store = useRepoStore();
+  const repo = useRepo((s) => s.repo);
+  const { closeDialog } = store;
   const [name, setName] = useState('');
   const [checkout, setCheckout] = useState(true);
   const [problem, setProblem] = useState<string | null>(null);
@@ -34,7 +36,7 @@ export function CreateBranchDialog({ startPoint, startLabel }: { startPoint: str
   const submit = async () => {
     if (!valid || busy) return;
     setBusy(true);
-    const err = await createBranch(name.trim(), startPoint, checkout);
+    const err = await store.createBranch(name.trim(), startPoint, checkout);
     setBusy(false);
     if (err) setProblem(err.stderr?.trim() || err.message);
     else closeDialog();

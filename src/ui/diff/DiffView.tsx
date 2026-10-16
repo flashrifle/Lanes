@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { call, toAppError } from '../../api';
 import type { FileDiff } from '../../types';
 import { Icon } from '../common/Icons';
-import { closeDiff, useStore } from '../state/store';
+import { Tooltip } from '../common/Tooltip';
+import { useRepo, useRepoStore } from '../state/repoContext';
 
 export function DiffView() {
-  const file = useStore((s) => s.diff);
-  const repo = useStore((s) => s.repo);
+  const store = useRepoStore();
+  const { closeDiff } = store;
+  const file = useRepo((s) => s.diff);
+  const repo = useRepo((s) => s.repo);
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,7 +31,7 @@ export function DiffView() {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); closeDiff(); } };
     window.addEventListener('keydown', key, true);
     return () => window.removeEventListener('keydown', key, true);
-  }, [file]);
+  }, [file, closeDiff]);
 
   if (!file) return null;
   return (
@@ -38,7 +41,7 @@ export function DiffView() {
         {diff?.oldMode && diff.newMode && diff.oldMode !== diff.newMode && <span className="muted">모드 {diff.oldMode} → {diff.newMode}</span>}
         <span className="grow" />
         <span className="muted">Esc로 닫기</span>
-        <button className="icon-btn" onClick={closeDiff} title="닫기"><Icon name="close" size={14} /></button>
+        <Tooltip label="Diff 닫기" shortcut="Esc"><button className="icon-btn" onClick={closeDiff}><Icon name="close" size={14} /></button></Tooltip>
       </div>
       <div className="diff-body">
         {error && <div className="empty-note err">{error}</div>}
