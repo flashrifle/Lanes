@@ -1,6 +1,7 @@
 import { appStore, useApp } from '../state/appStore';
 import { Tooltip } from '../common/Tooltip';
 import { formatCommitDate } from '../format/date';
+import { t } from '../../i18n';
 
 export function WelcomeScreen() {
   const recents = useApp((s) => s.recents);
@@ -9,13 +10,13 @@ export function WelcomeScreen() {
     <div className="welcome">
       <div className="welcome-card">
         <h1>Git Log</h1>
-        <p className="muted">Git 저장소를 열어 커밋 로그를 확인하세요.</p>
+        <p className="muted">{t('welcome.subtitle')}</p>
         <button className="btn primary" onClick={() => void appStore.chooseAndOpenRepo()} disabled={booting}>
-          저장소 열기…
+          {t('common.openRepo')}
         </button>
         {recents.length > 0 && (
           <>
-            <h2>최근 항목</h2>
+            <h2>{t('welcome.recent')}</h2>
             <ul className="recent-list">
               {recents.map((r) => (
                 <li key={r.path} className={r.exists ? '' : 'missing'}>
@@ -23,8 +24,8 @@ export function WelcomeScreen() {
                     <span className="recent-name">{r.name}</span>
                     <span className="recent-path">{r.path}</span>
                   </button>
-                  <span className="recent-date">{r.exists ? formatCommitDate(r.lastOpened) : '없음'}</span>
-                  <Tooltip label="최근 항목에서 제거" side="left"><button className="icon-btn" onClick={() => void appStore.removeRecent(r.path)}>×</button></Tooltip>
+                  <span className="recent-date">{r.exists ? formatCommitDate(r.lastOpened) : t('welcome.missing')}</span>
+                  <Tooltip label={t('welcome.removeRecent')} side="left"><button className="icon-btn" onClick={() => void appStore.removeRecent(r.path)}>×</button></Tooltip>
                 </li>
               ))}
             </ul>

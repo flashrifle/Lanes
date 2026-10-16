@@ -16,8 +16,9 @@ import { appStore, useApp, type TabEntry } from './ui/state/appStore';
 import { RepoCtx, useRepo, useRepoStore } from './ui/state/repoContext';
 import { TabBar } from './ui/tabs/TabBar';
 import { WelcomeScreen } from './ui/welcome/WelcomeScreen';
+import { t } from './i18n';
 
-const OP_LABEL = { merge: '병합 진행 중', rebase: '리베이스 진행 중', cherryPick: '체리픽 진행 중', revert: '되돌리기 진행 중', bisect: '이분 탐색 중' } as const;
+const OP_KEY = { merge: 'op.merge', rebase: 'op.rebase', cherryPick: 'op.cherryPick', revert: 'op.revert', bisect: 'op.bisect' } as const;
 
 function RepoBar() {
   const repo = useRepo((s) => s.repo);
@@ -30,12 +31,12 @@ function RepoBar() {
       {head && (
         <span className="repo-branch">
           <Icon name="branch" size={12} />
-          {head.unborn ? '(커밋 없음)' : head.detached ? `HEAD 분리됨 ${head.hash?.slice(0, 8) ?? ''}` : head.branch}
+          {head.unborn ? t('repo.noCommits') : head.detached ? t('repo.detached', { hash: head.hash?.slice(0, 8) ?? '' }) : head.branch}
         </span>
       )}
-      {op && <span className="repo-op">{OP_LABEL[op]}</span>}
+      {op && <span className="repo-op">{t(OP_KEY[op])}</span>}
       <span className="grow" />
-      {snapshot && <span className="muted">{snapshot.commitCount.toLocaleString('ko-KR')}개 커밋 · {snapshot.loadMillis}ms</span>}
+      {snapshot && <span className="muted">{t('repo.commitCount', { n: snapshot.commitCount })} · {snapshot.loadMillis}ms</span>}
     </div>
   );
 }

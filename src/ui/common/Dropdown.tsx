@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './Icons';
 import { Tooltip } from './Tooltip';
+import { t } from '../../i18n';
 
 interface Props {
   label: ReactNode;
@@ -26,14 +27,14 @@ export function Dropdown({ label, active, onClear, title, children, align = 'lef
   return (
     <div className="dd" ref={ref}>
       <div className={'dd-btn' + (active ? ' active' : '') + (open ? ' open' : '')}>
-        <Tooltip label={title ?? '필터'} side="bottom">
+        <Tooltip label={title ?? t('dd.filter')} side="bottom">
           <button className="dd-main" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
             <span className="dd-label">{label}</span>
             {!(active && onClear) && <Icon name="chevronDown" size={12} />}
           </button>
         </Tooltip>
         {active && onClear && (
-          <Tooltip label="필터 지우기" side="bottom">
+          <Tooltip label={t('dd.clear')} side="bottom">
             <button className="dd-clear" onClick={() => { onClear(); setOpen(false); }}>
               <Icon name="close" size={10} />
             </button>

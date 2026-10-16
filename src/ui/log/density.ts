@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { t } from '../../i18n';
 
 export type Density = 'comfortable' | 'compact';
 
@@ -19,7 +20,7 @@ export const DENSITIES: Record<Density, GraphMetrics> = {
   compact: { rowH: 26, laneW: 20, lineW: 4.5, nodeR: 4.5, ring: 2.5, mergeR: 6.5, dotR: 3 },
 };
 
-export const DENSITY_LABEL: Record<Density, string> = { comfortable: '넓게', compact: '촘촘하게' };
+export const densityLabel = (d: Density): string => t(d === 'compact' ? 'density.compact' : 'density.comfortable');
 const KEY = 'lanes.density';
 
 function load(): Density {

@@ -7,6 +7,7 @@ import { useRepo, useRepoStore } from '../state/repoContext';
 import { rowMapOf } from '../state/repoStore';
 import { buildFileTree, fileExt, type FileTreeNode } from './fileTree';
 import { openDiffWindow } from '../../diffwindow/session';
+import { t } from '../../i18n';
 
 const STATUS_CLASS: Record<ChangedFile['status'], string> = {
   added: 'st-added', modified: 'st-modified', deleted: 'st-deleted', renamed: 'st-renamed', copied: 'st-added',
@@ -39,9 +40,9 @@ export function ChangesTree() {
   const openDiff = (f: ChangedFile) => {
     if (!repo || !result) return;
     const files = result.files;
-    const title = hashes.length === 1 ? hashes[0].slice(0, 8) : `${hashes.length}개 커밋`;
+    const title = hashes.length === 1 ? hashes[0].slice(0, 8) : t('changes.commitsTitle', { n: hashes.length });
     openDiffWindow({ repoPath: repo.path, repoName: repo.name, files, index: Math.max(0, files.indexOf(f)), title })
-      .catch((e) => store.showToast('error', `Diff 창을 열 수 없습니다: ${toAppError(e).message}`));
+      .catch((e) => store.showToast('error', t('changes.diffOpenFail', { msg: toAppError(e).message })));
   };
 
   useEffect(() => {
@@ -75,7 +76,7 @@ export function ChangesTree() {
             <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} />
             <Icon name="folder" size={13} />
             <span className="ct-name">{n.name}</span>
-            <span className="muted ct-count">{n.fileCount}개 파일</span>
+            <span className="muted ct-count">{t('changes.files', { n: n.fileCount })}</span>
           </div>
           {open && n.children.map((c) => renderNode(c, depth + 1))}
         </div>
@@ -106,16 +107,16 @@ export function ChangesTree() {
   return (
     <div className="changes">
       <div className="pane-header">
-        <span>{hashes.length === 0 ? '변경 사항' : `${count}개 파일`}</span>
-        {result?.isMerge && <span className="muted"> · 병합 커밋 (첫 번째 부모 기준)</span>}
-        {result && result.mode !== 'single' && <span className="muted"> · {result.mode === 'range' ? '범위' : '합집합'}</span>}
+        <span>{hashes.length === 0 ? t('changes.heading') : t('changes.files', { n: count })}</span>
+        {result?.isMerge && <span className="muted">{t('changes.mergeNote')}</span>}
+        {result && result.mode !== 'single' && <span className="muted"> · {result.mode === 'range' ? t('changes.range') : t('changes.union')}</span>}
         {busy && <span className="muted"> …</span>}
       </div>
       <div className="changes-body">
-        {tooMany && <div className="empty-note">{selection.set.size.toLocaleString('ko-KR')}개의 커밋이 선택됨 — 변경 사항을 표시하기에 너무 많습니다</div>}
-        {!tooMany && hashes.length === 0 && <div className="empty-note">커밋을 선택하세요</div>}
+        {tooMany && <div className="empty-note">{t('changes.tooMany', { n: selection.set.size })}</div>}
+        {!tooMany && hashes.length === 0 && <div className="empty-note">{t('changes.selectCommit')}</div>}
         {error && <div className="empty-note err">{error}</div>}
-        {result && count === 0 && <div className="empty-note">변경된 파일이 없습니다</div>}
+        {result && count === 0 && <div className="empty-note">{t('changes.noFiles')}</div>}
         {tree.map((n) => renderNode(n, 0))}
       </div>
     </div>

@@ -155,7 +155,7 @@ input:focus-visible { outline: 0; }
 .loading-bar { position: absolute; top: 0; left: 0; right: 0; height: 3px; z-index: 5; background: linear-gradient(90deg, transparent, var(--accent), transparent); background-size: 40% 100%; background-repeat: no-repeat; animation: slide 1s linear infinite; }
 @keyframes slide { from { background-position: -40% 0; } to { background-position: 140% 0; } }
 .log-scroll { flex: 1; overflow: auto; outline: 0; position: relative; }
-.log-row { position: absolute; top: 0; left: 0; right: 0; min-width: 640px; display: grid; grid-template-columns: minmax(200px, 1fr) 140px 104px 26px; align-items: center; white-space: nowrap; }
+.log-row { position: absolute; top: 0; left: 0; right: 0; min-width: 640px; display: grid; grid-template-columns: minmax(200px, 1fr) 140px 120px 26px; align-items: center; white-space: nowrap; }
 .log-row:hover { background: #1A1E29; }
 .log-row.selected { background: var(--sel); }
 .log-scroll:not(:focus) .log-row.selected { background: var(--sel-inactive); }

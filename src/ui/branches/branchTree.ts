@@ -1,4 +1,5 @@
 import type { BranchTreeNode, Ref } from '../../types';
+import { t } from '../../i18n';
 
 type Group = Extract<BranchTreeNode, { kind: 'group' }>;
 
@@ -29,7 +30,7 @@ function sortDeep(g: Group): void {
   for (const c of g.children) if (c.kind === 'group') sortDeep(c);
 }
 
-export const HEAD_LABEL = 'HEAD(현재 브랜치)';
+export const headLabel = (): string => t('branches.head');
 
 /**
  * HEAD / 로컬 / 리모트 > remote > folders / 태그. Empty groups are omitted.
@@ -41,14 +42,14 @@ export function buildBranchTree(refs: Ref[], query = ''): BranchTreeNode[] {
   const out: BranchTreeNode[] = [];
 
   const head = refs.find((r) => r.type === 'head');
-  if (head && match({ ...head, name: HEAD_LABEL }) ) {
-    out.push({ kind: 'ref', id: 'ref:' + head.fullName, label: HEAD_LABEL, ref: head });
+  if (head && match({ ...head, name: headLabel() }) ) {
+    out.push({ kind: 'ref', id: 'ref:' + head.fullName, label: headLabel(), ref: head });
   }
 
-  const local: Group = { kind: 'group', id: 'local', label: '로컬', group: 'local', children: [] };
+  const local: Group = { kind: 'group', id: 'local', label: t('branches.local'), group: 'local', children: [] };
   for (const r of refs) if (r.type === 'localBranch' && match(r)) addPath(local, 'local', r.name.split('/'), r);
 
-  const remote: Group = { kind: 'group', id: 'remote', label: '리모트', group: 'remote', children: [] };
+  const remote: Group = { kind: 'group', id: 'remote', label: t('branches.remote'), group: 'remote', children: [] };
   for (const r of refs) {
     if (r.type !== 'remoteBranch' || !match(r)) continue;
     const remoteName = r.remote ?? r.name.split('/')[0];
@@ -62,7 +63,7 @@ export function buildBranchTree(refs: Ref[], query = ''): BranchTreeNode[] {
     addPath(rg, rid, rest.split('/'), r);
   }
 
-  const tags: Group = { kind: 'group', id: 'tags', label: '태그', group: 'tags', children: [] };
+  const tags: Group = { kind: 'group', id: 'tags', label: t('branches.tags'), group: 'tags', children: [] };
   for (const r of refs) if (r.type === 'tag' && match(r)) addPath(tags, 'tags', r.name.split('/'), r);
 
   for (const g of [local, remote, tags]) {

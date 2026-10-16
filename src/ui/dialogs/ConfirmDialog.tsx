@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useRepoStore } from '../state/repoContext';
 import type { DialogState } from '../state/repoStore';
+import { t } from '../../i18n';
 
 type Confirm = Extract<DialogState, { kind: 'confirm' }>;
 
@@ -19,7 +20,7 @@ export function ConfirmDialog({ dialog }: { dialog: Confirm }) {
         <p>{dialog.message}</p>
         <div className="modal-actions">
           {/* Destructive dialogs focus Cancel so a stray Enter can never confirm. */}
-          <button className="btn" autoFocus={!!dialog.danger} onClick={store.closeDialog}>취소</button>
+          <button className="btn" autoFocus={!!dialog.danger} onClick={store.closeDialog}>{t('common.cancel')}</button>
           {dialog.alt && <button className="btn" onClick={dialog.alt.onClick}>{dialog.alt.label}</button>}
           <button className={'btn ' + (dialog.danger ? 'danger' : 'primary')} autoFocus={!dialog.danger} onClick={dialog.onConfirm}>{dialog.confirmLabel}</button>
         </div>

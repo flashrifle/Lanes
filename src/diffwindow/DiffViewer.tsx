@@ -3,6 +3,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref, type UIEvent } from 'react';
 import { buildDisplay, sbsKinds, uniKinds, type BlockType, type DiffModel, type SbsRow, type SideLine, type UniRow } from './align';
+import { t } from '../i18n';
 
 export const ROW_H = 20;
 
@@ -41,7 +42,7 @@ function CodeText({ line }: { line: SideLine }) {
   return (
     <>
       {body}
-      {line.noNewline && <span className="dw-nonl" title="파일 끝에 줄바꿈 없음">⏎̸</span>}
+      {line.noNewline && <span className="dw-nonl" title={t('dw.noNewline')}>⏎̸</span>}
     </>
   );
 }
@@ -175,7 +176,7 @@ export function DiffViewer({ model, mode, collapse, initialBlock, ref }: Props) 
     : [-1, -1];
 
   const renderSbs = (r: SbsRow, rowIdx: number) => {
-    if (r.kind === 'gap') return <div className="dw-gaprow">⋯ {r.count.toLocaleString()}줄 생략됨 (불러오지 않음)</div>;
+    if (r.kind === 'gap') return <div className="dw-gaprow">⋯ {t('dw.gap', { n: r.count })}</div>;
     let lc = '';
     let rc = '';
     let edge = '';
@@ -203,7 +204,7 @@ export function DiffViewer({ model, mode, collapse, initialBlock, ref }: Props) 
   };
 
   const renderUni = (r: UniRow, rowIdx: number) => {
-    if (r.kind === 'gap') return <div className="dw-gaprow">⋯ {r.count.toLocaleString()}줄 생략됨 (불러오지 않음)</div>;
+    if (r.kind === 'gap') return <div className="dw-gaprow">⋯ {t('dw.gap', { n: r.count })}</div>;
     let c = '';
     let edge = '';
     if (r.kind !== 'equal') {
@@ -238,8 +239,8 @@ export function DiffViewer({ model, mode, collapse, initialBlock, ref }: Props) 
             return (
               <div key={vi.key} className="dw-row" style={{ transform: `translateY(${vi.start}px)` }}>
                 {it.kind === 'fold' ? (
-                  <button className="dw-foldrow" onClick={() => expand(it.start)} title="클릭하여 펼치기">
-                    <span className="dw-fold-ico">⋯</span> {(it.end - it.start).toLocaleString()}줄 숨김
+                  <button className="dw-foldrow" onClick={() => expand(it.start)} title={t('dw.expandTip')}>
+                    <span className="dw-fold-ico">⋯</span> {t('dw.hidden', { n: it.end - it.start })}
                   </button>
                 ) : mode === 'sbs' ? (
                   renderSbs(model.sbs[it.index], it.index)

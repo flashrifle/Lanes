@@ -13,6 +13,7 @@ import { GraphCell } from './GraphCell';
 import { useMetrics } from './density';
 import { badgeOf } from './palette';
 import { buildRefLabels, refsByIndex, type RefLabel } from './refLabels';
+import { t } from '../../i18n';
 
 interface RowProps {
   row: number;
@@ -63,7 +64,7 @@ const Row = memo(function Row({ row, top, rowH, graph, meta, labels, sig, select
       </div>
       <div className="cell status">
         {sig && sig.status !== 'none' && (
-          <Tooltip side="left" label={`서명: ${sig.status}${sig.signer ? ' (' + sig.signer + ')' : ''}`}>
+          <Tooltip side="left" label={t('log.signature', { text: `${sig.status}${sig.signer ? ' (' + sig.signer + ')' : ''}` })}>
             <span className={'sig ' + (sig.status === 'good' ? 'good' : 'bad')}>
               <Icon name={sig.status === 'good' ? 'check' : 'warning'} size={12} />
             </span>
@@ -173,10 +174,10 @@ export function LogTable() {
     if (!selection.set.has(ci)) selectRowAt(row, { shift: false, toggle: false });
     const hash = snapshot.hashes[ci];
     ctx.open(e, [
-      { label: '해시 복사', onClick: () => void navigator.clipboard?.writeText(hash) },
+      { label: t('log.copyHash'), onClick: () => void navigator.clipboard?.writeText(hash) },
       { separator: true },
-      { label: '리비전 체크아웃…', onClick: () => checkoutCommit(hash) },
-      { label: '여기서 새 브랜치…', onClick: () => openDialog({ kind: 'createBranch', startPoint: hash, startLabel: hash.slice(0, 10) }) },
+      { label: t('log.checkoutRev'), onClick: () => checkoutCommit(hash) },
+      { label: t('log.newBranchHere'), onClick: () => openDialog({ kind: 'createBranch', startPoint: hash, startLabel: hash.slice(0, 10) }) },
     ]);
   };
 
@@ -196,9 +197,9 @@ export function LogTable() {
       {loading && <div className="loading-bar" />}
       <div className="log-scroll" ref={parentRef} tabIndex={0} onKeyDown={onKeyDown} onMouseDown={onRowClick}>
         {!layout ? (
-          <div className="empty-note">{loading ? '불러오는 중…' : ''}</div>
+          <div className="empty-note">{loading ? t('common.loading') : ''}</div>
         ) : rowCount === 0 ? (
-          <div className="empty-note">{snapshot && snapshot.commitCount === 0 ? '커밋이 없습니다' : '일치하는 커밋이 없습니다'}</div>
+          <div className="empty-note">{snapshot && snapshot.commitCount === 0 ? t('log.noCommits') : t('log.noMatch')}</div>
         ) : (
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative', minWidth: 640 }}>
             {items.map((v) => {
@@ -225,7 +226,7 @@ export function LogTable() {
         )}
       </div>
       {snapshot?.truncated && (
-        <div className="trunc-banner">처음 {snapshot.commitCount.toLocaleString('ko-KR')}개의 커밋만 표시됩니다</div>
+        <div className="trunc-banner">{t('log.truncated', { n: snapshot.commitCount })}</div>
       )}
       {ctx.menu && <ContextMenu menu={ctx.menu} onClose={ctx.close} />}
     </div>

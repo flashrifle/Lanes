@@ -15,6 +15,7 @@ import {
   type DiffSessionUpdateEvent,
 } from './session';
 import './diff.css';
+import { t } from '../i18n';
 
 const FULL_CONTEXT = 1_000_000;
 const PREFS_KEY = 'dw-prefs';
@@ -100,10 +101,7 @@ const Ico = ({ n, size = 16 }: { n: keyof typeof I; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">{I[n]}</svg>
 );
 
-const STATUS_LABEL: Record<ChangedFile['status'], string> = {
-  added: '추가됨', modified: '수정됨', deleted: '삭제됨', renamed: '이름 변경', copied: '복사됨',
-  typeChanged: '유형 변경', unmerged: '병합 안 됨', unknown: '알 수 없음',
-};
+const statusLabel = (s: ChangedFile['status']): string => t(`dw.status.${s}`);
 
 export default function DiffWindowApp() {
   const [session, setSession] = useState<DiffSession | null>(() => {
@@ -210,7 +208,7 @@ export default function DiffWindowApp() {
       }
       const canFile = dir > 0 ? index < files.length - 1 : index > 0;
       if (!canFile) {
-        setHint(dir > 0 ? '마지막 변경입니다' : '첫 번째 변경입니다');
+        setHint(dir > 0 ? t('dw.lastChange') : t('dw.firstChange'));
         return;
       }
       const now = Date.now();
@@ -220,7 +218,7 @@ export default function DiffWindowApp() {
         return;
       }
       edge.current = { dir, at: now };
-      setHint(dir > 0 ? '다음 파일로 이동하려면 다시 누르세요' : '이전 파일로 이동하려면 다시 누르세요');
+      setHint(dir > 0 ? t('dw.nextFileHint') : t('dw.prevFileHint'));
     },
     [goFile, index, files.length],
   );
@@ -291,30 +289,30 @@ export default function DiffWindowApp() {
   if (!session) {
     return (
       <div className="dw-root">
-        <div className="dw-placeholder">비교할 파일 정보가 없습니다. 메인 창에서 파일을 다시 열어 주세요.</div>
+        <div className="dw-placeholder">{t('dw.noSession')}</div>
       </div>
     );
   }
 
   const modeNote = state.kind === 'ok' && state.data.diff.oldMode && state.data.diff.newMode && state.data.diff.oldMode !== state.data.diff.newMode
-    ? `모드 ${state.data.diff.oldMode} → ${state.data.diff.newMode}`
+    ? t('dw.mode', { a: state.data.diff.oldMode, b: state.data.diff.newMode })
     : null;
 
   let body: ReactNode;
-  if (!file) body = <div className="dw-placeholder">파일이 없습니다</div>;
-  else if (state.kind === 'loading') body = <div className="dw-placeholder">불러오는 중…</div>;
+  if (!file) body = <div className="dw-placeholder">{t('dw.noFile')}</div>;
+  else if (state.kind === 'loading') body = <div className="dw-placeholder">{t('common.loading')}</div>;
   else if (state.kind === 'error') body = <div className="dw-placeholder dw-err">{state.message}</div>;
-  else if (state.kind === 'binary') body = <div className="dw-placeholder">바이너리 파일은 내용을 비교할 수 없습니다</div>;
+  else if (state.kind === 'binary') body = <div className="dw-placeholder">{t('dw.binary')}</div>;
   else if (state.data.model.sbs.length === 0) {
     body = (
       <div className="dw-placeholder">
         {headers?.renamed
-          ? '내용이 동일합니다 (이름만 변경됨)'
+          ? t('dw.renameOnly')
           : file.status === 'added' || file.status === 'deleted'
-            ? '빈 파일입니다'
+            ? t('dw.emptyFile')
             : modeNote
-              ? '내용 차이 없음 (파일 모드만 변경됨)'
-              : '차이가 없습니다'}
+              ? t('dw.modeOnly')
+              : t('dw.noDiff')}
       </div>
     );
   } else {
@@ -336,14 +334,14 @@ export default function DiffWindowApp() {
     <div className="dw-root">
       {/* toolbar */}
       <div className="dw-toolbar">
-        <button className="dw-btn" title="이전 변경 (Shift+F7, ⌘↑)" onClick={() => goChange(-1)} disabled={state.kind !== 'ok'}>
+        <button className="dw-btn" title={t('dw.prevChange')} onClick={() => goChange(-1)} disabled={state.kind !== 'ok'}>
           <Ico n="up" />
         </button>
-        <button className="dw-btn" title="다음 변경 (F7, ⌘↓)" onClick={() => goChange(1)} disabled={state.kind !== 'ok'}>
+        <button className="dw-btn" title={t('dw.nextChange')} onClick={() => goChange(1)} disabled={state.kind !== 'ok'}>
           <Ico n="down" />
         </button>
         <span className="dw-sep" />
-        <button className="dw-btn" title="이전 파일 (⌘←, ⌥←)" onClick={() => goFile(-1)} disabled={index <= 0}>
+        <button className="dw-btn" title={t('dw.prevFile')} onClick={() => goFile(-1)} disabled={index <= 0}>
           <Ico n="left" />
         </button>
         <button
@@ -351,15 +349,15 @@ export default function DiffWindowApp() {
           title={session.title}
           onClick={() => setMenu(menu === 'files' ? null : 'files')}
         >
-          {index + 1}/{files.length}개 파일
+          {t('dw.fileCount', { i: index + 1, n: files.length })}
         </button>
-        <button className="dw-btn" title="다음 파일 (⌘→, ⌥→)" onClick={() => goFile(1)} disabled={index >= files.length - 1}>
+        <button className="dw-btn" title={t('dw.nextFile')} onClick={() => goFile(1)} disabled={index >= files.length - 1}>
           <Ico n="right" />
         </button>
         <span className="dw-sep" />
         <button
           className={'dw-btn' + (prefs.collapse ? ' on' : '')}
-          title="변경되지 않은 부분 접기"
+          title={t('dw.collapseUnchanged')}
           aria-pressed={prefs.collapse}
           onClick={() => updatePrefs({ collapse: !prefs.collapse })}
         >
@@ -367,14 +365,14 @@ export default function DiffWindowApp() {
         </button>
         {hint && <span className="dw-hint">{hint}</span>}
         <span className="dw-grow" />
-        {state.kind === 'ok' && <span className="dw-count">{changeCount === 0 ? '차이 없음' : `차이점 ${changeCount}개`}</span>}
-        <div className="dw-seg" role="group" aria-label="보기 방식">
-          <button className={sbs ? 'on' : ''} onClick={() => updatePrefs({ mode: 'sbs' })} title="나란히 보기">나란히</button>
-          <button className={!sbs ? 'on' : ''} onClick={() => updatePrefs({ mode: 'unified' })} title="통합 보기">통합</button>
+        {state.kind === 'ok' && <span className="dw-count">{changeCount === 0 ? t('dw.noDifferences') : t('dw.diffCount', { n: changeCount })}</span>}
+        <div className="dw-seg" role="group" aria-label={t('dw.viewMode')}>
+          <button className={sbs ? 'on' : ''} onClick={() => updatePrefs({ mode: 'sbs' })} title={t('dw.sbsLong')}>{t('dw.sbsShort')}</button>
+          <button className={!sbs ? 'on' : ''} onClick={() => updatePrefs({ mode: 'unified' })} title={t('dw.unifiedLong')}>{t('dw.unifiedShort')}</button>
         </div>
         <button
           className={'dw-btn dw-pop-anchor' + (menu === 'settings' ? ' on' : '')}
-          title="설정"
+          title={t('dw.settings')}
           onClick={() => setMenu(menu === 'settings' ? null : 'settings')}
         >
           <Ico n="gear" />
@@ -400,24 +398,24 @@ export default function DiffWindowApp() {
         )}
         {menu === 'settings' && (
           <div className="dw-pop dw-pop-settings">
-            <div className="dw-pop-title">표시 범위</div>
+            <div className="dw-pop-title">{t('dw.scope')}</div>
             <label className="dw-pop-check">
-              <input type="radio" checked={!prefs.collapse} onChange={() => updatePrefs({ collapse: false })} /> 전체 파일 표시
+              <input type="radio" checked={!prefs.collapse} onChange={() => updatePrefs({ collapse: false })} /> {t('dw.showAll')}
             </label>
             <label className="dw-pop-check">
-              <input type="radio" checked={prefs.collapse} onChange={() => updatePrefs({ collapse: true })} /> 변경되지 않은 부분 접기
-            </label>
-            <div className="dw-pop-sep" />
-            <div className="dw-pop-title">보기</div>
-            <label className="dw-pop-check">
-              <input type="radio" checked={sbs} onChange={() => updatePrefs({ mode: 'sbs' })} /> 나란히 보기
-            </label>
-            <label className="dw-pop-check">
-              <input type="radio" checked={!sbs} onChange={() => updatePrefs({ mode: 'unified' })} /> 통합 보기
+              <input type="radio" checked={prefs.collapse} onChange={() => updatePrefs({ collapse: true })} /> {t('dw.collapseUnchanged')}
             </label>
             <div className="dw-pop-sep" />
-            <label className="dw-pop-check dw-disabled" title="지원 예정">
-              <input type="checkbox" disabled /> 공백 무시 (지원 예정)
+            <div className="dw-pop-title">{t('dw.view')}</div>
+            <label className="dw-pop-check">
+              <input type="radio" checked={sbs} onChange={() => updatePrefs({ mode: 'sbs' })} /> {t('dw.sbsLong')}
+            </label>
+            <label className="dw-pop-check">
+              <input type="radio" checked={!sbs} onChange={() => updatePrefs({ mode: 'unified' })} /> {t('dw.unifiedLong')}
+            </label>
+            <div className="dw-pop-sep" />
+            <label className="dw-pop-check dw-disabled" title={t('dw.soon')}>
+              <input type="checkbox" disabled /> {t('dw.ignoreWs')}
             </label>
           </div>
         )}
@@ -429,7 +427,7 @@ export default function DiffWindowApp() {
           <div className="dw-fh">
             <Ico n="lock" size={13} />
             {headers.leftMissing ? (
-              <span className="dw-fh-muted">(파일 없음)</span>
+              <span className="dw-fh-muted">{t('dw.noFileParen')}</span>
             ) : (
               <>
                 <span className="dw-hash">{shortHash(file.fromHash)}</span>
@@ -448,7 +446,7 @@ export default function DiffWindowApp() {
             <div className="dw-fh">
               <Ico n="lock" size={13} />
               {headers.rightMissing ? (
-                <span className="dw-fh-muted">(파일 없음)</span>
+                <span className="dw-fh-muted">{t('dw.noFileParen')}</span>
               ) : (
                 <>
                   <span className="dw-hash">{shortHash(file.toHash)}</span>
@@ -458,17 +456,17 @@ export default function DiffWindowApp() {
             </div>
           )}
           <div className="dw-fh-meta">
-            {STATUS_LABEL[file.status]}
+            {statusLabel(file.status)}
             {modeNote && <> · {modeNote}</>}
           </div>
         </div>
       )}
 
       {state.kind === 'ok' && state.data.partial && (
-        <div className="dw-banner">파일이 너무 커서 변경된 부분 주변만 표시합니다</div>
+        <div className="dw-banner">{t('dw.bannerBigFile')}</div>
       )}
       {state.kind === 'ok' && state.data.diff.truncated && (
-        <div className="dw-banner">diff가 너무 커서 일부만 표시됩니다</div>
+        <div className="dw-banner">{t('dw.bannerBigDiff')}</div>
       )}
 
       <div className="dw-body">{body}</div>

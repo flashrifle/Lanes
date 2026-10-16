@@ -6,6 +6,7 @@ import { buildRefLabels, refsByIndex } from '../log/refLabels';
 import { badgeOf, colorOf } from '../log/palette';
 import { Tooltip } from '../common/Tooltip';
 import { useRepo, useRepoStore } from '../state/repoContext';
+import { t } from '../../i18n';
 
 export function CommitDetailsPanel() {
   const store = useRepoStore();
@@ -30,7 +31,7 @@ export function CommitDetailsPanel() {
     setDetails(null); setContaining(null); setError(null);
     if (!repo || !hash) return;
     let cancelled = false;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       call('get_commit_details', { repoPath: repo.path, hash })
         .then((d) => { if (!cancelled) setDetails(d); })
         .catch((e) => { if (!cancelled) setError(toAppError(e).message); });
@@ -38,7 +39,7 @@ export function CommitDetailsPanel() {
         .then((c) => { if (!cancelled) setContaining(c); })
         .catch(() => {});
     }, 80);
-    return () => { cancelled = true; clearTimeout(t); };
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [repo, hash]);
 
   const labels = useMemo(() => {
@@ -50,8 +51,8 @@ export function CommitDetailsPanel() {
   const lineColor = lineIdx != null ? colorOf(lineIdx) : 'var(--muted)';
   const badge = lineIdx != null ? badgeOf(lineIdx) : { bg: '#3A4157', ink: '#fff' };
 
-  if (visibleSelected.length === 0) return <div className="details"><div className="empty-note">커밋을 선택하면 상세 정보가 표시됩니다</div></div>;
-  if (visibleSelected.length > 1) return <div className="details"><div className="empty-note">{visibleSelected.length}개의 커밋이 선택됨</div></div>;
+  if (visibleSelected.length === 0) return <div className="details"><div className="empty-note">{t('details.empty')}</div></div>;
+  if (visibleSelected.length > 1) return <div className="details"><div className="empty-note">{t('details.multi', { n: visibleSelected.length })}</div></div>;
   if (error) return <div className="details"><div className="empty-note err">{error}</div></div>;
   if (!details) return <div className="details"><div className="empty-note">…</div></div>;
 
@@ -65,13 +66,13 @@ export function CommitDetailsPanel() {
     <div className="details">
       <div className="details-scroll">
         <div className="d-card" style={{ borderLeftColor: lineColor }}>
-          <div className="d-eyebrow">{lineName ? `${lineName} 노선 · ` : ''}{d.hash.slice(0, 7)}</div>
+          <div className="d-eyebrow">{lineName ? t('details.line', { name: lineName }) : ''}{d.hash.slice(0, 7)}</div>
           <div className="d-subject">{d.subject}</div>
         </div>
         {d.body && <pre className="d-body">{d.body}</pre>}
         <div className="d-meta">
-          <Tooltip label="전체 해시 복사">
-            <button className="hash-link" onClick={() => { void navigator.clipboard?.writeText(d.hash); showToast('info', '해시를 복사했습니다'); }}>
+          <Tooltip label={t('details.copyFull')}>
+            <button className="hash-link" onClick={() => { void navigator.clipboard?.writeText(d.hash); showToast('info', t('details.hashCopied')); }}>
               {d.hash.slice(0, 10)}
             </button>
           </Tooltip>
@@ -80,25 +81,25 @@ export function CommitDetailsPanel() {
           <span className="muted"> · {formatFullDate(d.authorTime)}</span>
         </div>
         {!sameCommitter && (
-          <div className="d-meta muted">커밋: {d.committerName} &lt;{d.committerEmail}&gt; · {formatFullDate(d.committerTime)}</div>
+          <div className="d-meta muted">{t('details.committer')}{d.committerName} &lt;{d.committerEmail}&gt; · {formatFullDate(d.committerTime)}</div>
         )}
         {d.parents.length > 0 && (
           <div className="d-meta">
-            <span className="muted">부모: </span>
+            <span className="muted">{t('details.parents')}</span>
             {d.parents.map((p) => (
-              <Tooltip key={p} label="부모 커밋으로 이동"><button className="hash-link" onClick={() => jumpToHash(p)}>{p.slice(0, 10)}</button></Tooltip>
+              <Tooltip key={p} label={t('details.parentTip')}><button className="hash-link" onClick={() => jumpToHash(p)}>{p.slice(0, 10)}</button></Tooltip>
             ))}
           </div>
         )}
         {labels.length > 0 && (
           <div className="d-meta">
-            <span className="muted">참조: </span>
+            <span className="muted">{t('details.refs')}</span>
             {labels.map((l) => <span key={l.text} className="badge" style={{ ['--c' as string]: badge.bg, ['--ink' as string]: badge.ink }}>{l.text}</span>)}
           </div>
         )}
         <div className="d-meta">
-          <span className="muted">포함된 브랜치: </span>
-          {containing === null ? <span className="muted">…</span> : containingNames.length ? containingNames.join(', ') : <span className="muted">없음</span>}
+          <span className="muted">{t('details.containing')}</span>
+          {containing === null ? <span className="muted">…</span> : containingNames.length ? containingNames.join(', ') : <span className="muted">{t('details.none')}</span>}
         </div>
       </div>
     </div>

@@ -6,20 +6,21 @@ import { datePresetRange, parseDateInput, type DatePreset } from '../state/logic
 import { Tooltip } from '../common/Tooltip';
 import { useRepo, useRepoStore } from '../state/repoContext';
 import { modKey } from '../platform';
-import { DENSITIES, DENSITY_LABEL, setDensity, useDensity, type Density } from './density';
+import { DENSITIES, densityLabel, setDensity, useDensity, type Density } from './density';
 import { colorOf, MUTED_LINE } from './palette';
+import { t, type Key } from '../../i18n';
 
-const SORTS: { id: GraphSortType; label: string }[] = [
-  { id: 'bek', label: '표준 (BEK)' },
-  { id: 'normal', label: '날짜순' },
-  { id: 'linearBek', label: '선형 (Linear BEK)' },
+const SORTS: { id: GraphSortType; key: Key }[] = [
+  { id: 'bek', key: 'sort.bek' },
+  { id: 'normal', key: 'sort.normal' },
+  { id: 'linearBek', key: 'sort.linearBek' },
 ];
 
-const PRESETS: { id: DatePreset; label: string }[] = [
-  { id: 'today', label: '오늘' },
-  { id: 'week', label: '최근 7일' },
-  { id: 'month', label: '최근 30일' },
-  { id: 'year', label: '최근 1년' },
+const PRESETS: { id: DatePreset; key: Key }[] = [
+  { id: 'today', key: 'preset.today' },
+  { id: 'week', key: 'preset.week' },
+  { id: 'month', key: 'preset.month' },
+  { id: 'year', key: 'preset.year' },
 ];
 
 function toDateInput(ts: number | null): string {
@@ -73,7 +74,7 @@ export function FilterBar() {
 
   const refs = snapshot?.refs.refs ?? [];
   const shortOf = (full: string) => refs.find((r) => r.fullName === full)?.name ?? full.replace(/^refs\/(heads|remotes|tags)\//, '');
-  const branchLabel = scopeRefs ? `브랜치 ${scopeRefs.length}` : '브랜치';
+  const branchLabel = scopeRefs ? t('filter.branchN', { n: scopeRefs.length }) : t('filter.branch');
   const dotOf = (full: string): string => {
     const r = refs.find((x) => x.fullName === full);
     const row = r?.index != null && layout ? layout.rowOf(r.index) : -1;
@@ -95,7 +96,9 @@ export function FilterBar() {
 
   const date = filterUi.date;
   const dateActive = !!date && (date.since != null || date.until != null);
-  const dateLabel = !dateActive ? '날짜' : `날짜: ${toDateInput(date!.since) || '…'} ~ ${toDateInput(date!.until) || '…'}`;
+  const sortKey = SORTS.find((s) => s.id === sort)?.key;
+  const sortLabel = sortKey ? t(sortKey) : '';
+  const dateLabel = !dateActive ? t('filter.date') : t('filter.dateRange', { from: toDateInput(date!.since) || '…', to: toDateInput(date!.until) || '…' });
 
   const paths = filterUi.paths;
   const [pathInput, setPathInput] = useState('');
@@ -112,25 +115,25 @@ export function FilterBar() {
         <Icon name="search" size={13} />
         <input
           value={text}
-          placeholder="텍스트 또는 해시"
+          placeholder={t('filter.searchPh')}
           spellCheck={false}
-          aria-label="커밋 검색"
+          aria-label={t('filter.searchAria')}
           aria-invalid={filterError}
-          title={filterError ? '잘못된 정규식입니다 (Rust regex 문법)' : undefined}
+          title={filterError ? t('filter.badRegex') : undefined}
           onChange={(e) => setText(e.target.value)}
         />
-        <Tooltip label={regex ? '정규식 사용 중 (클릭하여 끄기)' : '정규식으로 검색'}>
+        <Tooltip label={regex ? t('filter.regexOn') : t('filter.regexOff')}>
           <button className={'toggle' + (regex ? ' on' : '')} aria-pressed={regex} onClick={() => toggleFlag({ regex: !regex })}>.*</button>
         </Tooltip>
-        <Tooltip label={matchCase ? '대/소문자 구분 중 (클릭하여 끄기)' : '대/소문자 구분'}>
+        <Tooltip label={matchCase ? t('filter.caseOn') : t('filter.caseOff')}>
           <button className={'toggle' + (matchCase ? ' on' : '')} aria-pressed={matchCase} onClick={() => toggleFlag({ matchCase: !matchCase })}>Cc</button>
         </Tooltip>
       </div>
 
-      <Dropdown label={branchLabel} active={!!scopeRefs} title="브랜치 필터">
+      <Dropdown label={branchLabel} active={!!scopeRefs} title={t('filter.branchTitle')}>
         {() => (
           <div className="pop-list">
-            <label className="pop-item"><input type="radio" checked={!scopeRefs} onChange={() => setScopeRefs(null)} />모든 브랜치</label>
+            <label className="pop-item"><input type="radio" checked={!scopeRefs} onChange={() => setScopeRefs(null)} />{t('filter.allBranches')}</label>
             <div className="pop-sep" />
             {selectable.map((r) => (
               <label key={r.fullName} className="pop-item">
@@ -146,19 +149,19 @@ export function FilterBar() {
         <span key={full} className="chip" title={full}>
           <i className="chip-dot" style={{ background: dotOf(full) }} />
           <span className="chip-text">{shortOf(full)}</span>
-          <Tooltip label="이 브랜치 필터 제거" side="bottom">
-            <button className="chip-x" aria-label={`${shortOf(full)} 필터 제거`} onClick={() => { const n = scopeRefs.filter((x) => x !== full); setScopeRefs(n.length ? n : null); }}>
+          <Tooltip label={t('filter.removeBranchTip')} side="bottom">
+            <button className="chip-x" aria-label={t('filter.removeBranchAria', { name: shortOf(full) })} onClick={() => { const n = scopeRefs.filter((x) => x !== full); setScopeRefs(n.length ? n : null); }}>
               <Icon name="close" size={9} />
             </button>
           </Tooltip>
         </span>
       ))}
 
-      <Dropdown label={users ? `사용자: ${users.length === 1 ? users[0] : users.length + '명'}` : '사용자'} active={!!users} onClear={() => setUsers(null)} title="사용자 필터">
+      <Dropdown label={users ? t('filter.userLabel', { v: users.length === 1 ? users[0] : t('filter.userCount', { n: users.length }) }) : t('filter.user')} active={!!users} onClear={() => setUsers(null)} title={t('filter.userTitle')}>
         {() => (
           <div className="pop-list">
             {me && (
-              <label className="pop-item"><input type="checkbox" checked={!!users?.includes(me)} onChange={() => toggleUser(me)} />나 ({repo?.user.name ?? me})</label>
+              <label className="pop-item"><input type="checkbox" checked={!!users?.includes(me)} onChange={() => toggleUser(me)} />{t('filter.me', { name: repo?.user.name ?? me })}</label>
             )}
             {authors.slice(0, 300).map((a) => (
               <label key={a.email + a.name} className="pop-item" title={a.email}>
@@ -166,37 +169,37 @@ export function FilterBar() {
                 <span className="grow">{a.name}</span><span className="muted">{a.commitCount}</span>
               </label>
             ))}
-            {authors.length === 0 && <div className="pop-empty">사용자 없음</div>}
+            {authors.length === 0 && <div className="pop-empty">{t('filter.noUsers')}</div>}
           </div>
         )}
       </Dropdown>
 
-      <Dropdown label={dateLabel} active={dateActive} onClear={() => setDateRange(null)} title="날짜 필터">
+      <Dropdown label={dateLabel} active={dateActive} onClear={() => setDateRange(null)} title={t('filter.dateTitle')}>
         {(close) => (
           <div className="pop-list">
             {PRESETS.map((p) => (
-              <button key={p.id} className="pop-item btn-like" onClick={() => { setDateRange(datePresetRange(p.id)); close(); }}>{p.label}</button>
+              <button key={p.id} className="pop-item btn-like" onClick={() => { setDateRange(datePresetRange(p.id)); close(); }}>{t(p.key)}</button>
             ))}
             <div className="pop-sep" />
             <div className="pop-row">
-              <span>시작</span>
+              <span>{t('filter.from')}</span>
               <input type="date" value={toDateInput(date?.since ?? null)} onChange={(e) => setDateRange({ since: parseDateInput(e.target.value, false), until: date?.until ?? null })} />
             </div>
             <div className="pop-row">
-              <span>종료</span>
+              <span>{t('filter.to')}</span>
               <input type="date" value={toDateInput(date?.until ?? null)} onChange={(e) => setDateRange({ since: date?.since ?? null, until: parseDateInput(e.target.value, true) })} />
             </div>
           </div>
         )}
       </Dropdown>
 
-      <Dropdown label={paths ? `경로: ${paths.length === 1 ? paths[0] : paths.length + '개'}` : '경로'} active={!!paths} onClear={() => setPaths(null)} title="경로 필터">
+      <Dropdown label={paths ? t('filter.pathLabel', { v: paths.length === 1 ? paths[0] : t('filter.pathCount', { n: paths.length }) }) : t('filter.path')} active={!!paths} onClear={() => setPaths(null)} title={t('filter.pathTitle')}>
         {() => (
           <div className="pop-list wide">
             <div className="pop-row">
               <input
                 autoFocus
-                placeholder="저장소 상대 경로 입력 후 Enter"
+                placeholder={t('filter.pathPh')}
                 value={pathInput}
                 onChange={(e) => setPathInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') addPath(); }}
@@ -205,7 +208,7 @@ export function FilterBar() {
             {(paths ?? []).map((p) => (
               <div key={p} className="pop-item">
                 <span className="grow">{p}</span>
-                <Tooltip label="이 경로 제거" side="left">
+                <Tooltip label={t('filter.pathRemove')} side="left">
                   <button className="icon-btn" onClick={() => { const n = (paths ?? []).filter((x) => x !== p); setPaths(n.length ? n : null); }}><Icon name="close" size={10} /></button>
                 </Tooltip>
               </div>
@@ -216,27 +219,27 @@ export function FilterBar() {
 
       <div className="grow" />
 
-      <Dropdown label={<Icon name="sort" size={14} />} title={`정렬 · 행 높이: ${SORTS.find((s) => s.id === sort)?.label} · ${DENSITY_LABEL[density]}`} align="right">
+      <Dropdown label={<Icon name="sort" size={14} />} title={t('filter.sortTitle', { sort: sortLabel, density: densityLabel(density) })} align="right">
         {(close) => (
           <div className="pop-list">
-            <div className="pop-title">정렬</div>
+            <div className="pop-title">{t('filter.sort')}</div>
             {SORTS.map((s) => (
               <label key={s.id} className="pop-item">
-                <input type="radio" checked={sort === s.id} onChange={() => { setSort(s.id); close(); }} />{s.label}
+                <input type="radio" checked={sort === s.id} onChange={() => { setSort(s.id); close(); }} />{t(s.key)}
               </label>
             ))}
             <div className="pop-sep" />
-            <div className="pop-title">행 높이</div>
+            <div className="pop-title">{t('filter.rowHeight')}</div>
             {(Object.keys(DENSITIES) as Density[]).map((d) => (
               <label key={d} className="pop-item">
                 <input type="radio" checked={density === d} onChange={() => { setDensity(d); close(); }} />
-                {DENSITY_LABEL[d]}<span className="muted grow" style={{ textAlign: 'right' }}>{DENSITIES[d].rowH}px</span>
+                {densityLabel(d)}<span className="muted grow" style={{ textAlign: 'right' }}>{DENSITIES[d].rowH}px</span>
               </label>
             ))}
           </div>
         )}
       </Dropdown>
-      <Tooltip label="새로 고침" shortcut={modKey('R')}>
+      <Tooltip label={t('filter.refresh')} shortcut={modKey('R')}>
         <button className={'icon-btn' + (loading ? ' spin' : '')} onClick={() => void reload()}>
           <Icon name="refresh" size={14} />
         </button>

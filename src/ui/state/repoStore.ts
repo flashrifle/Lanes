@@ -9,6 +9,7 @@ import {
   EMPTY_FILTER_UI, EMPTY_SELECTION, buildVisibleMask, captureSelection, isFilterEmpty, moveFocusTo, restoreSelection,
   selectAll, selectRow, toLogFilter, type FilterUi, type RowMap, type Selection, type TextFilterUi,
 } from './logic';
+import { t } from '../../i18n';
 
 export const LOG_LIMIT = 200_000;
 const META_BATCH = 500;
@@ -299,13 +300,13 @@ export class RepoStore extends Store<RepoState> {
     const layout = this.state.layout;
     if (ci == null || !layout) return false;
     const row = layout.rowOf(ci);
-    if (row < 0) { this.showToast('info', '현재 필터에서 보이지 않는 커밋입니다'); return false; }
+    if (row < 0) { this.showToast('info', t('store.hiddenByFilter')); return false; }
     this.set({ selection: selectRow(EMPTY_SELECTION, row, { shift: false, toggle: false }, layout), scrollRequest: { row, nonce: nonce++ } });
     return true;
   };
   jumpToHash = (hash: string): boolean => {
     const i = this.state.snapshot?.hashes.indexOf(hash) ?? -1;
-    if (i < 0) { this.showToast('info', '로드된 로그에 없는 커밋입니다'); return false; }
+    if (i < 0) { this.showToast('info', t('store.notLoaded')); return false; }
     return this.jumpToCommitIndex(i);
   };
 
@@ -366,7 +367,7 @@ export class RepoStore extends Store<RepoState> {
     try {
       const r = await fn(this.path);
       if (this.stale(epoch)) return { ok: true };
-      const msg = r.message.trim().split('\n').pop()?.slice(0, 200) || '완료';
+      const msg = r.message.trim().split('\n').pop()?.slice(0, 200) || t('store.done');
       this.showToast('info', msg);
       void this.reload();
       return { ok: true };
@@ -387,62 +388,62 @@ export class RepoStore extends Store<RepoState> {
     else if (ref.type === 'remoteBranch') target = { kind: 'remoteBranch', name: ref.name, localName: null };
     else if (ref.type === 'tag') target = { kind: 'tag', name: ref.name };
     else return;
-    void this.runOp(`체크아웃: ${ref.name}`, (repoPath) => call('checkout', { repoPath, target })).then((o) => this.failToast(o));
+    void this.runOp(t('store.checkout', { name: ref.name }), (repoPath) => call('checkout', { repoPath, target })).then((o) => this.failToast(o));
   };
 
   checkoutCommit = (hash: string): void => {
     this.openDialog({
       kind: 'confirm',
-      title: '리비전 체크아웃',
-      message: `${hash.slice(0, 10)} 커밋을 체크아웃하면 HEAD가 분리(detached)됩니다. 계속하시겠습니까?`,
-      confirmLabel: '체크아웃',
+      title: t('store.checkoutRev.title'),
+      message: t('store.checkoutRev.msg', { hash: hash.slice(0, 10) }),
+      confirmLabel: t('common.checkout'),
       onConfirm: () => {
         this.closeDialog();
-        void this.runOp('체크아웃…', (repoPath) => call('checkout', { repoPath, target: { kind: 'commit', hash } })).then((o) => this.failToast(o));
+        void this.runOp(t('store.checkingOut'), (repoPath) => call('checkout', { repoPath, target: { kind: 'commit', hash } })).then((o) => this.failToast(o));
       },
     });
   };
 
   fetchAll = async (): Promise<void> => {
-    this.failToast(await this.runOp('가져오는 중…', (repoPath) => call('fetch', { repoPath, remote: null })));
+    this.failToast(await this.runOp(t('store.fetching'), (repoPath) => call('fetch', { repoPath, remote: null })));
   };
 
   pull = async (mode: PullMode = 'ffOnly'): Promise<void> => {
-    const o = await this.runOp('풀 중…', (repoPath) => call('pull', { repoPath, mode }));
+    const o = await this.runOp(t('store.pulling'), (repoPath) => call('pull', { repoPath, mode }));
     if (o.ok) return;
     if (o.error.code === 'nonFastForward') {
       this.openDialog({
         kind: 'confirm',
-        title: '빨리 감기 불가',
-        message: '로컬 브랜치와 리모트가 갈라졌습니다. 어떻게 통합하시겠습니까?',
-        confirmLabel: '리베이스',
+        title: t('store.ff.title'),
+        message: t('store.ff.msg'),
+        confirmLabel: t('common.rebase'),
         onConfirm: () => { this.closeDialog(); void this.pull('rebase'); },
-        alt: { label: '병합', onClick: () => { this.closeDialog(); void this.pull('merge'); } },
+        alt: { label: t('common.merge'), onClick: () => { this.closeDialog(); void this.pull('merge'); } },
       });
     } else this.failToast(o);
   };
 
   createBranch = async (name: string, startPoint: string, checkout: boolean): Promise<AppError | null> => {
-    const o = await this.runOp(`브랜치 생성: ${name}`, (repoPath) => call('create_branch', { repoPath, name, startPoint, checkout }));
+    const o = await this.runOp(t('store.createBranch', { name }), (repoPath) => call('create_branch', { repoPath, name, startPoint, checkout }));
     return o.ok ? null : o.error;
   };
 
   deleteBranch = (name: string, force = false): void => {
     const run = (f: boolean) =>
-      void this.runOp(`브랜치 삭제: ${name}`, (repoPath) => call('delete_branch', { repoPath, name, force: f })).then((o) => {
+      void this.runOp(t('store.deleteBranch', { name }), (repoPath) => call('delete_branch', { repoPath, name, force: f })).then((o) => {
         if (o.ok) return;
         if (o.error.code === 'notFullyMerged' && !f) {
           this.openDialog({
-            kind: 'confirm', title: '병합되지 않은 브랜치', danger: true, confirmLabel: '강제 삭제',
-            message: `'${name}' 브랜치에 병합되지 않은 커밋이 있습니다. 강제로 삭제하시겠습니까?`,
+            kind: 'confirm', title: t('store.unmerged.title'), danger: true, confirmLabel: t('store.unmerged.confirm'),
+            message: t('store.unmerged.msg', { name }),
             onConfirm: () => { this.closeDialog(); run(true); },
           });
         } else this.failToast(o);
       });
     if (force) { run(true); return; }
     this.openDialog({
-      kind: 'confirm', title: '브랜치 삭제', danger: true, confirmLabel: '삭제',
-      message: `'${name}' 브랜치를 삭제하시겠습니까?`,
+      kind: 'confirm', title: t('store.delete.title'), danger: true, confirmLabel: t('common.delete'),
+      message: t('store.delete.msg', { name }),
       onConfirm: () => { this.closeDialog(); run(false); },
     });
   };
