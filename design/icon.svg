@@ -1,41 +1,63 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#34373D"/>
-      <stop offset="1" stop-color="#1B1C1F"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2F3240"/>
+      <stop offset="1" stop-color="#15161B"/>
     </linearGradient>
     <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.10"/>
-      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.12"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <!-- stroke gradients run along each lane's direction of travel (bottom → top) -->
+    <linearGradient id="gMain" gradientUnits="userSpaceOnUse" x1="0" y1="1000" x2="0" y2="40">
+      <stop offset="0" stop-color="#2F6BFF"/>
+      <stop offset="1" stop-color="#3FD0FF"/>
+    </linearGradient>
+    <linearGradient id="gFeat" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#8A4DFF"/>
+      <stop offset="1" stop-color="#FF5FC8"/>
+    </linearGradient>
+    <linearGradient id="gTip" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#2FD47A"/>
+      <stop offset="1" stop-color="#D8F25A"/>
     </linearGradient>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
       <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.35"/>
     </filter>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <clipPath id="plate"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
   </defs>
-  <!-- macOS icon grid: 824x824 squircle-ish plate centered on a 1024 canvas -->
+
   <g filter="url(#shadow)">
     <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
   </g>
+
+  <g clip-path="url(#plate)">
+    <!-- soft neon glow behind the lanes -->
+    <g fill="none" stroke-linecap="round" stroke-width="96" opacity="0.45" filter="url(#glow)">
+      <path d="M352 1000 L352 40" stroke="url(#gMain)"/>
+      <path d="M352 770 C352 660 640 680 640 540 C640 410 352 430 352 300" stroke="url(#gFeat)"/>
+      <path d="M640 540 C640 430 790 420 790 300 L790 190" stroke="url(#gTip)"/>
+    </g>
+    <!-- lanes: main runs off the plate edges to suggest continuing history -->
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="84">
+      <path d="M640 540 C640 430 790 420 790 300 L790 230" stroke="url(#gTip)"/>
+      <path d="M352 770 C352 660 640 680 640 540 C640 410 352 430 352 300" stroke="url(#gFeat)"/>
+      <path d="M352 1000 L352 40" stroke="url(#gMain)"/>
+    </g>
+    <!-- commits -->
+    <g stroke="#1A1B21" stroke-width="22">
+      <circle cx="352" cy="300" r="70" fill="#3FC4FF"/>
+      <circle cx="352" cy="770" r="58" fill="#2F78FF"/>
+      <circle cx="640" cy="540" r="58" fill="#C255EE"/>
+      <circle cx="790" cy="230" r="62" fill="#C9EE5C"/>
+    </g>
+    <!-- merge commit highlight dot -->
+    <circle cx="352" cy="300" r="24" fill="#FFFFFF" opacity="0.9"/>
+  </g>
+
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#hl)"/>
-  <rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="3"/>
-
-  <g transform="translate(-48 0)">
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="46">
-    <!-- green: short-lived branch off purple, still open (tip) -->
-    <path d="M620 560 C620 470 780 470 780 380 L780 330" stroke="#5FB865"/>
-    <!-- purple: feature branch that forks from main and merges back -->
-    <path d="M400 720 C400 640 620 640 620 560 L620 420 C620 340 400 340 400 270" stroke="#A571E6"/>
-    <!-- blue: main lane -->
-    <path d="M400 860 L400 170" stroke="#4B8DF8"/>
-  </g>
-
-  <g stroke="#232427" stroke-width="16">
-    <circle cx="400" cy="270" r="50" fill="#4B8DF8"/>
-    <circle cx="400" cy="500" r="42" fill="#4B8DF8"/>
-    <circle cx="400" cy="720" r="42" fill="#4B8DF8"/>
-    <circle cx="620" cy="560" r="42" fill="#A571E6"/>
-    <circle cx="620" cy="420" r="42" fill="#A571E6"/>
-    <circle cx="780" cy="330" r="42" fill="#5FB865"/>
-  </g>
-  </g>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.09" stroke-width="3"/>
 </svg>
