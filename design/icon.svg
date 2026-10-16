@@ -36,26 +36,26 @@
 
   <g clip-path="url(#plate)">
     <!-- soft neon glow behind the lanes -->
-    <g fill="none" stroke-linecap="round" stroke-width="96" opacity="0.45" filter="url(#glow)">
+    <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="96" opacity="0.45" filter="url(#glow)">
       <path d="M352 1000 L352 40" stroke="url(#gMain)"/>
-      <path d="M352 770 C352 660 640 680 640 540 C640 410 352 430 352 300" stroke="url(#gFeat)"/>
-      <path d="M640 540 C640 430 790 420 790 300 L790 190" stroke="url(#gTip)"/>
+      <path d="M352 820 L572 600 L572 490 L352 270" stroke="url(#gFeat)"/>
+      <path d="M572 545 L772 345 L772 230" stroke="url(#gTip)"/>
     </g>
     <!-- lanes: main runs off the plate edges to suggest continuing history -->
-    <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="84">
-      <path d="M640 540 C640 430 790 420 790 300 L790 230" stroke="url(#gTip)"/>
-      <path d="M352 770 C352 660 640 680 640 540 C640 410 352 430 352 300" stroke="url(#gFeat)"/>
+    <g fill="none" stroke-linecap="butt" stroke-linejoin="miter" stroke-width="84">
+      <path d="M572 545 L772 345 L772 230" stroke="url(#gTip)"/>
+      <path d="M352 820 L572 600 L572 490 L352 270" stroke="url(#gFeat)"/>
       <path d="M352 1000 L352 40" stroke="url(#gMain)"/>
     </g>
     <!-- commits -->
     <g stroke="#1A1B21" stroke-width="22">
-      <circle cx="352" cy="300" r="70" fill="#3FC4FF"/>
-      <circle cx="352" cy="770" r="58" fill="#2F78FF"/>
-      <circle cx="640" cy="540" r="58" fill="#C255EE"/>
-      <circle cx="790" cy="230" r="62" fill="#C9EE5C"/>
+      <circle cx="352" cy="270" r="70" fill="#3FC4FF"/>
+      <circle cx="352" cy="820" r="58" fill="#2F78FF"/>
+      <circle cx="572" cy="545" r="58" fill="#C255EE"/>
+      <circle cx="772" cy="230" r="62" fill="#C9EE5C"/>
     </g>
     <!-- merge commit highlight dot -->
-    <circle cx="352" cy="300" r="24" fill="#FFFFFF" opacity="0.9"/>
+    <circle cx="352" cy="270" r="24" fill="#FFFFFF" opacity="0.9"/>
   </g>
 
   <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#hl)"/>
