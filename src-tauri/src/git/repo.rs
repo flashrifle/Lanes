@@ -50,3 +50,15 @@ pub fn open_repo_info(path: &str) -> Result<RepoInfo> {
         common_dir: common,
     })
 }
+
+/// Stable key for a repository path (locks, watchers, snapshots): the canonical path when it
+/// resolves, otherwise the input with trailing separators trimmed.
+pub fn canonical_key(path: &str) -> String {
+    match std::fs::canonicalize(path) {
+        Ok(p) => p.to_string_lossy().into_owned(),
+        Err(_) => {
+            let t = path.trim_end_matches(['/', '\\']);
+            if t.is_empty() { path.to_string() } else { t.to_string() }
+        }
+    }
+}

@@ -1,4 +1,4 @@
-use super::runner::{check_hash, empty_tree, run};
+use super::runner::{empty_tree, norm_hash, run_capped};
 use crate::error::{AppError, Result};
 use crate::models::*;
 
@@ -113,37 +113,30 @@ pub fn file_diff(repo: &str, req: &DiffRequest) -> Result<FileDiff> {
     if req.path.is_empty() || req.path.contains('\0') {
         return Err(AppError::invalid("empty path"));
     }
-    check_hash(&req.to_hash)?;
+    let to = norm_hash(&req.to_hash)?;
     let base = match &req.from_hash {
-        Some(h) => {
-            check_hash(h)?;
-            h.clone()
-        }
+        Some(h) => norm_hash(h)?,
         None => empty_tree(repo)?,
     };
     let ctx = req.context_lines.unwrap_or(3).min(10_000);
     let mut args: Vec<String> = vec![
+        "--literal-pathspecs".into(),
         "diff".into(),
         "--no-color".into(),
         "--no-ext-diff".into(),
+        "--no-textconv".into(),
         "-M".into(),
         format!("-U{ctx}"),
         base,
-        req.to_hash.clone(),
+        to,
         "--".into(),
     ];
     if let Some(o) = &req.old_path {
         args.push(o.clone());
     }
     args.push(req.path.clone());
-    let out = run(repo, &args, true)?;
-    let mut bytes: &[u8] = &out.stdout;
-    let mut truncated = false;
-    if bytes.len() > MAX_BYTES {
-        bytes = &bytes[..MAX_BYTES];
-        truncated = true;
-    }
-    let mut text = String::from_utf8_lossy(bytes).into_owned();
+    let (out, mut truncated) = run_capped(repo, &args, MAX_BYTES)?;
+    let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
     if let Some((idx, _)) = text.match_indices('\n').nth(MAX_LINES) {
         text.truncate(idx);
         truncated = true;

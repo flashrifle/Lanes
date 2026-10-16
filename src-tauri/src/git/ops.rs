@@ -1,19 +1,39 @@
 //! Write operations. Never force-pushes, never `reset --hard`; force delete only with an explicit flag.
-use super::runner::{check_hash, check_not_option, run, run_raw, run_stream};
+use super::repo::canonical_key;
+use super::runner::{check_not_option, norm_hash, run, run_raw, run_stream};
 use crate::error::{AppError, ErrorCode, Result};
 use crate::models::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, TryLockError};
+use std::time::Duration;
 
-/// Per-repo mutex map: a second write op on the same repo fails with `busy`.
-#[derive(Default)]
-pub struct RepoLocks(Mutex<HashMap<String, Arc<Mutex<()>>>>);
+pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(300);
+pub const LOCAL_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Per-repo mutex map (keyed by canonical path): a second write op on the same repo fails with
+/// `busy`. The lock is an RAII guard, so it is released on success, error, timeout and panic.
+pub struct RepoLocks {
+    map: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    pub network_timeout: Duration,
+    pub local_timeout: Duration,
+}
+
+impl Default for RepoLocks {
+    fn default() -> Self {
+        Self::with_timeouts(NETWORK_TIMEOUT, LOCAL_TIMEOUT)
+    }
+}
 
 impl RepoLocks {
+    pub fn with_timeouts(network_timeout: Duration, local_timeout: Duration) -> Self {
+        RepoLocks { map: Mutex::default(), network_timeout, local_timeout }
+    }
+
     pub fn run<T>(&self, repo: &str, f: impl FnOnce() -> Result<T>) -> Result<T> {
+        let key = canonical_key(repo);
         let m = {
-            let mut map = self.0.lock().unwrap_or_else(|p| p.into_inner());
-            map.entry(repo.to_string()).or_default().clone()
+            let mut map = self.map.lock().unwrap_or_else(|p| p.into_inner());
+            map.entry(key).or_default().clone()
         };
         let _guard = match m.try_lock() {
             Ok(g) => g,
@@ -102,11 +122,11 @@ pub fn checkout(
                 vec!["checkout".into(), "--detach".into(), full]
             }
             CheckoutTarget::Commit { hash } => {
-                check_hash(hash)?;
-                vec!["checkout".into(), "--detach".into(), hash.clone()]
+                let h = norm_hash(hash)?;
+                vec!["checkout".into(), "--detach".into(), h]
             }
         };
-        let o = run_stream(repo, &args, on_line)?;
+        let o = run_stream(repo, &args, locks.local_timeout, false, on_line)?;
         Ok(OpResult { message: o.summary() })
     })
 }
@@ -121,7 +141,7 @@ pub fn fetch(locks: &RepoLocks, repo: &str, remote: Option<&str>, on_line: &mut 
             }
             None => args.push("--all".into()),
         }
-        let o = run_stream(repo, &args, on_line)?;
+        let o = run_stream(repo, &args, locks.network_timeout, true, on_line)?;
         Ok(OpResult { message: o.summary() })
     })
 }
@@ -135,7 +155,7 @@ pub fn pull(locks: &RepoLocks, repo: &str, mode: PullMode, on_line: &mut dyn FnM
         };
         let mut args = vec!["pull", "--progress"];
         args.extend_from_slice(flags);
-        let o = run_stream(repo, &args, on_line)?;
+        let o = run_stream(repo, &args, locks.network_timeout, true, on_line)?;
         Ok(OpResult { message: o.summary() })
     })
 }
@@ -152,7 +172,7 @@ pub fn create_branch(
         check_not_option("start point", start_point)?;
         let args: Vec<&str> =
             if checkout { vec!["checkout", "-b", name, start_point] } else { vec!["branch", name, start_point] };
-        let o = run(repo, &args, false)?;
+        let o = run_stream(repo, &args, locks.local_timeout, false, &mut |_| {})?;
         let msg = o.summary();
         Ok(OpResult {
             message: if msg.is_empty() { format!("Created branch '{name}'") } else { msg },
@@ -168,7 +188,7 @@ pub fn delete_branch(locks: &RepoLocks, repo: &str, name: &str, force: bool) -> 
             return Err(AppError::invalid("cannot delete the currently checked out branch"));
         }
         let flag = if force { "-D" } else { "-d" };
-        let o = run(repo, &["branch", flag, name], false)?;
+        let o = run_stream(repo, &["branch", flag, name], locks.local_timeout, false, &mut |_| {})?;
         Ok(OpResult { message: o.summary() })
     })
 }

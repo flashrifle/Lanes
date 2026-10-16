@@ -594,3 +594,205 @@ fn merge_operation_detected() {
     let refs = read_refs(r.path(), &Favorites::default()).unwrap();
     assert_eq!(refs.operation, Some(RepoOperation::Merge));
 }
+
+// ---------- multi-repo / hardening ----------
+
+fn diff_req(path: &str, from: Option<&str>, to: &str) -> DiffRequest {
+    DiffRequest {
+        path: path.into(),
+        old_path: None,
+        from_hash: from.map(str::to_string),
+        to_hash: to.into(),
+        context_lines: None,
+    }
+}
+
+#[test]
+fn literal_pathspecs() {
+    let r = TestRepo::new();
+    let base = r.commit_file("base.txt", "b\n", "base");
+    r.write("f*.txt", "star\n");
+    r.write("fa.txt", "fa\n");
+    r.git(&["add", "-A"]);
+    r.git(&["commit", "-q", "-m", "both"]);
+    let both = r.git(&["rev-parse", "HEAD"]);
+    r.commit_file("fa.txt", "fa2\n", "only fa");
+    let d = diff::file_diff(r.path(), &diff_req("f*.txt", Some(&base), &both)).unwrap();
+    let text: Vec<&str> = d.hunks.iter().flat_map(|h| h.lines.iter().map(|l| l.text.as_str())).collect();
+    assert_eq!(text, vec!["star"], "glob must not pull in fa.txt");
+    let d = diff::file_diff(r.path(), &diff_req(":(top)fa.txt", Some(&base), &both)).unwrap();
+    assert!(d.hunks.is_empty(), "pathspec magic must be literal");
+
+    let store = SnapshotStore::default();
+    let snap = r.load(&store);
+    let s = store.get(snap.snapshot_id).unwrap();
+    let f = LogFilter { text: None, users: None, date: None, paths: Some(vec!["f*.txt".into()]) };
+    let m = snapshot::filter_commits(&s, &f).unwrap().matches.unwrap();
+    assert_eq!(m.len(), 1);
+    assert_eq!(snap.hashes[m[0] as usize], both);
+}
+
+#[test]
+fn diff_is_truncated_while_streaming() {
+    let r = TestRepo::new();
+    let base = r.commit_file("a.txt", "x\n", "base");
+    let line = "y".repeat(999);
+    let big: String = (0..4000).map(|_| format!("{line}\n")).collect(); // ~4 MB, 4000 lines
+    let h = r.commit_file("big.txt", &big, "big");
+    let d = diff::file_diff(r.path(), &diff_req("big.txt", Some(&base), &h)).unwrap();
+    assert!(d.truncated);
+    let n: usize = d.hunks.iter().map(|h| h.lines.len()).sum();
+    assert!(n > 0 && n < 4000, "got {n} lines");
+    // small diffs are not flagged
+    let d = diff::file_diff(r.path(), &diff_req("a.txt", None, &base)).unwrap();
+    assert!(!d.truncated);
+}
+
+#[test]
+fn hash_validation() {
+    let r = TestRepo::new();
+    let h = r.commit_file("a.txt", "x\n", "c");
+    for bad in [&h[..4], &h[..12], "", "zz", &"g".repeat(40)] {
+        let e = diff::file_diff(r.path(), &diff_req("a.txt", None, bad)).unwrap_err();
+        assert_eq!(e.code, ErrorCode::InvalidArgument, "{bad}");
+        assert_eq!(changes::changed_files(r.path(), &[bad.to_string()]).unwrap_err().code, ErrorCode::InvalidArgument);
+    }
+    let locks = ops::RepoLocks::default();
+    let e = ops::checkout(&locks, r.path(), &CheckoutTarget::Commit { hash: h[..8].into() }, &mut no_progress()).unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
+    // uppercase full hash is normalised
+    diff::file_diff(r.path(), &diff_req("a.txt", None, &h.to_uppercase())).unwrap();
+}
+
+#[test]
+fn path_filter_on_unborn_repo() {
+    let r = TestRepo::new();
+    let store = SnapshotStore::default();
+    let snap = snapshot::load_log(
+        &store,
+        r.path(),
+        LogScope { refs: Some(vec!["HEAD".into()]), limit: None },
+        &Favorites::default(),
+    )
+    .unwrap();
+    let s = store.get(snap.snapshot_id).unwrap();
+    let f = LogFilter { text: None, users: None, date: None, paths: Some(vec!["a.txt".into()]) };
+    assert_eq!(snapshot::filter_commits(&s, &f).unwrap().matches, Some(vec![]));
+}
+
+#[test]
+fn two_repos_independent_snapshots_and_eviction() {
+    let a = TestRepo::new();
+    a.commit_file("a.txt", "a\n", "a1");
+    let b = TestRepo::new();
+    b.commit_file("b.txt", "b\n", "b1");
+    let store = SnapshotStore::default();
+    let a1 = a.load(&store).snapshot_id;
+    let b1 = b.load(&store).snapshot_id;
+    let a2 = a.load(&store).snapshot_id;
+    let a3 = a.load(&store).snapshot_id;
+    let a4 = a.load(&store).snapshot_id;
+    // A keeps only its 2 newest; B's snapshot is untouched by A's churn
+    assert_eq!(store.get(a1).err().unwrap().code, ErrorCode::SnapshotExpired);
+    assert_eq!(store.get(a2).err().unwrap().code, ErrorCode::SnapshotExpired);
+    store.get(a3).unwrap();
+    store.get(a4).unwrap();
+    let sb = store.get(b1).unwrap();
+    assert_eq!(sb.repo_path, b.path());
+    // trailing-slash alias maps to the same repo budget
+    let alias = format!("{}/", b.path());
+    let b2 = snapshot::load_log(&store, &alias, LogScope { refs: None, limit: None }, &Favorites::default()).unwrap().snapshot_id;
+    let b3 = b.load(&store).snapshot_id;
+    assert_eq!(store.get(b1).err().unwrap().code, ErrorCode::SnapshotExpired);
+    store.get(b2).unwrap();
+    store.get(b3).unwrap();
+    // closing A leaves B alone
+    store.release_repo(a.path());
+    assert!(store.get(a3).is_err() && store.get(a4).is_err());
+    store.get(b3).unwrap();
+}
+
+#[test]
+fn load_finishing_after_close_is_dropped() {
+    let r = TestRepo::new();
+    r.commit_file("a.txt", "a\n", "c");
+    let store = SnapshotStore::default();
+    let key = git_log_viewer_lib::git::repo::canonical_key(r.path());
+    let gen_at_start = store.generation(&key);
+    store.release_repo(r.path()); // tab closed while the load was in flight
+    let id = store.next_id();
+    let snap = snapshot::Snapshot {
+        id,
+        repo_path: r.path().into(),
+        key: key.clone(),
+        revs: vec![],
+        records: vec![],
+        hash_index: Default::default(),
+    };
+    assert!(store.insert_if_current(snap, gen_at_start).is_none());
+    assert_eq!(store.get(id).err().unwrap().code, ErrorCode::SnapshotExpired);
+    // a load that starts after the close works normally
+    let ok = r.load(&store);
+    store.get(ok.snapshot_id).unwrap();
+}
+
+#[test]
+fn locks_are_per_canonical_repo() {
+    let a = TestRepo::new();
+    let locks = ops::RepoLocks::default();
+    let alias = format!("{}/", a.path());
+    let r = locks.run(a.path(), || locks.run(&alias, || Ok(())));
+    assert_eq!(r.unwrap_err().code, ErrorCode::Busy);
+}
+
+#[cfg(unix)]
+#[test]
+fn write_op_timeout_kills_git_and_releases_lock() {
+    use std::os::unix::fs::PermissionsExt;
+    let r = TestRepo::new();
+    r.commit_file("a.txt", "a\n", "base");
+    r.git(&["branch", "other"]);
+    let hook = r.dir.join(".git/hooks/post-checkout");
+    std::fs::write(&hook, "#!/bin/sh\nsleep 30\n").unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let locks = ops::RepoLocks::with_timeouts(Duration::from_millis(500), Duration::from_millis(500));
+    let t = std::time::Instant::now();
+    let e = ops::checkout(&locks, r.path(), &CheckoutTarget::LocalBranch { name: "other".into() }, &mut no_progress()).unwrap_err();
+    assert_eq!(e.code, ErrorCode::GitFailed);
+    assert!(e.message.contains("timed out"), "{}", e.message);
+    assert!(t.elapsed() < Duration::from_secs(10));
+    // lock released: next op is not `busy`
+    std::fs::remove_file(&hook).unwrap();
+    let _ = std::fs::remove_file(r.dir.join(".git/index.lock"));
+    let e = ops::delete_branch(&locks, r.path(), "nonexistent", false).unwrap_err();
+    assert_ne!(e.code, ErrorCode::Busy);
+}
+
+#[test]
+fn two_repos_watch_independently() {
+    let a = TestRepo::new();
+    a.commit_file("a.txt", "a\n", "base");
+    let b = TestRepo::new();
+    b.commit_file("b.txt", "b\n", "base");
+    let state = AppState::new(None);
+    let (tx, rx) = std::sync::mpsc::channel::<RepoChangedEvent>();
+    let tx = std::sync::Mutex::new(tx);
+    let emit: git_log_viewer_lib::watcher::Emitter = Arc::new(move |ev| {
+        let _ = tx.lock().unwrap().send(ev);
+    });
+    state.open_repo(a.path(), emit.clone()).unwrap();
+    state.open_repo(b.path(), emit).unwrap();
+    std::thread::sleep(Duration::from_millis(600));
+    while rx.try_recv().is_ok() {}
+    a.git(&["commit", "-q", "--allow-empty", "-m", "a-touch"]);
+    let ev = rx.recv_timeout(Duration::from_secs(5)).expect("event for A");
+    assert_eq!(ev.repo_path, a.path());
+    state.close_repo(a.path());
+    std::thread::sleep(Duration::from_millis(600));
+    while rx.try_recv().is_ok() {}
+    a.git(&["commit", "-q", "--allow-empty", "-m", "a-after-close"]);
+    b.git(&["commit", "-q", "--allow-empty", "-m", "b-touch"]);
+    let ev = rx.recv_timeout(Duration::from_secs(5)).expect("event for B");
+    assert_eq!(ev.repo_path, b.path());
+    assert!(rx.recv_timeout(Duration::from_millis(900)).is_err(), "A's watcher must be stopped");
+}

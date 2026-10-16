@@ -1,4 +1,4 @@
-use super::runner::{check_hash, empty_tree, run, run_stdin};
+use super::runner::{empty_tree, norm_hash, run, run_stdin};
 use crate::error::{AppError, Result};
 use crate::models::*;
 use std::collections::{HashMap, HashSet};
@@ -82,7 +82,7 @@ fn base_tree(repo: &str, from: Option<&str>) -> Result<String> {
 pub fn diff_pair(repo: &str, from: Option<&str>, to: &str) -> Result<Vec<ChangedFile>> {
     let base = base_tree(repo, from)?;
     let ns = run(repo, &["diff-tree", "-r", "-z", "-M", "--name-status", &base, to], true)?;
-    let num = run(repo, &["diff", "-z", "-M", "--numstat", &base, to], true)?;
+    let num = run(repo, &["--literal-pathspecs", "diff", "-z", "--no-textconv", "--no-ext-diff", "-M", "--numstat", &base, to], true)?;
     let stats = parse_numstat(&num.stdout);
     Ok(parse_name_status(&ns.stdout)
         .into_iter()
@@ -130,9 +130,8 @@ pub fn changed_files(repo: &str, hashes: &[String]) -> Result<ChangesResult> {
     if hashes.is_empty() {
         return Err(AppError::invalid("no commits given"));
     }
-    for h in hashes {
-        check_hash(h)?;
-    }
+    let hashes: Vec<String> = hashes.iter().map(|h| norm_hash(h)).collect::<Result<_>>()?;
+    let hashes = &hashes[..];
     let parents = parents_of(repo, hashes)?;
     let first_parent = |h: &str| -> Result<Option<String>> {
         parents

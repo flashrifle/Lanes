@@ -37,8 +37,12 @@ pub async fn open_repo(state: State<'_, AppState>, app: AppHandle, path: String)
 
 #[tauri::command]
 pub async fn close_repo(state: State<'_, AppState>, repo_path: String) -> Result<()> {
-    state.close_repo(&repo_path);
-    Ok(())
+    let s = state.inner().clone();
+    blocking(move || {
+        s.close_repo(&repo_path);
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -49,8 +53,12 @@ pub async fn get_recent_repos(state: State<'_, AppState>) -> Result<Vec<RecentRe
 
 #[tauri::command]
 pub async fn remove_recent_repo(state: State<'_, AppState>, path: String) -> Result<()> {
-    state.persist.remove_recent(&path);
-    Ok(())
+    let s = state.inner().clone();
+    blocking(move || {
+        s.persist.remove_recent(&path);
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -61,8 +69,12 @@ pub async fn get_refs(state: State<'_, AppState>, repo_path: String) -> Result<R
 
 #[tauri::command]
 pub async fn set_favorite(state: State<'_, AppState>, repo_path: String, full_name: String, favorite: bool) -> Result<()> {
-    state.persist.set_favorite(&repo_path, &full_name, favorite);
-    Ok(())
+    let s = state.inner().clone();
+    blocking(move || {
+        s.persist.set_favorite(&repo_path, &full_name, favorite);
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]

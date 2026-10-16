@@ -1,6 +1,7 @@
 use crate::error::{AppError, ErrorCode, Result};
 use crate::git::log::{CommitRecord, load_records, scope_revs};
 use crate::git::refs::{Favorites, read_refs};
+use crate::git::repo::canonical_key;
 use crate::git::runner::run;
 use crate::models::*;
 use regex::RegexBuilder;
@@ -9,11 +10,14 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-pub const KEEP_SNAPSHOTS: usize = 4;
+/// Snapshots kept per repository (multi-tab: every open repo has its own budget).
+pub const KEEP_SNAPSHOTS_PER_REPO: usize = 2;
 
 pub struct Snapshot {
     pub id: u32,
     pub repo_path: String,
+    /// canonical repo key (see `repo::canonical_key`)
+    pub key: String,
     /// revision arguments used for the log (for the path filter)
     pub revs: Vec<String>,
     pub records: Vec<CommitRecord>,
@@ -23,7 +27,10 @@ pub struct Snapshot {
 #[derive(Default)]
 struct Inner {
     map: HashMap<u32, Arc<Snapshot>>,
-    order: VecDeque<u32>,
+    /// per-repo insertion order, oldest first
+    order: HashMap<String, VecDeque<u32>>,
+    /// per-repo close generation; bumped by `release_repo`
+    gens: HashMap<String, u64>,
 }
 
 pub struct SnapshotStore {
@@ -46,17 +53,37 @@ impl SnapshotStore {
         self.inner.lock().unwrap_or_else(|p| p.into_inner())
     }
 
-    pub fn insert(&self, s: Snapshot) -> Arc<Snapshot> {
-        let s = Arc::new(s);
+    /// Current close-generation of a repo; capture before loading and pass to `insert_if_current`.
+    pub fn generation(&self, key: &str) -> u64 {
+        self.lock().gens.get(key).copied().unwrap_or(0)
+    }
+
+    /// Inserts unless the repo was closed since `gen` was captured. Evicts the oldest snapshots
+    /// of that repo beyond the per-repo budget. Returns None when dropped.
+    pub fn insert_if_current(&self, s: Snapshot, gen_at_start: u64) -> Option<Arc<Snapshot>> {
         let mut g = self.lock();
+        if g.gens.get(&s.key).copied().unwrap_or(0) != gen_at_start {
+            return None;
+        }
+        let s = Arc::new(s);
         g.map.insert(s.id, s.clone());
-        g.order.push_back(s.id);
-        while g.order.len() > KEEP_SNAPSHOTS {
-            if let Some(old) = g.order.pop_front() {
-                g.map.remove(&old);
+        let mut evicted = Vec::new();
+        let q = g.order.entry(s.key.clone()).or_default();
+        q.push_back(s.id);
+        while q.len() > KEEP_SNAPSHOTS_PER_REPO {
+            if let Some(old) = q.pop_front() {
+                evicted.push(old);
             }
         }
-        s
+        for old in evicted {
+            g.map.remove(&old);
+        }
+        Some(s)
+    }
+
+    pub fn insert(&self, s: Snapshot) -> Arc<Snapshot> {
+        let gen_now = self.generation(&s.key);
+        self.insert_if_current(s, gen_now).expect("generation just read")
     }
 
     pub fn get(&self, id: u32) -> Result<Arc<Snapshot>> {
@@ -69,22 +96,30 @@ impl SnapshotStore {
 
     pub fn release(&self, id: u32) {
         let mut g = self.lock();
-        g.map.remove(&id);
-        g.order.retain(|&i| i != id);
+        if let Some(s) = g.map.remove(&id)
+            && let Some(q) = g.order.get_mut(&s.key)
+        {
+            q.retain(|&i| i != id);
+        }
     }
 
+    /// Drops all snapshots of a repo and invalidates in-flight loads for it.
     pub fn release_repo(&self, repo: &str) {
+        let key = canonical_key(repo);
         let mut g = self.lock();
-        let ids: Vec<u32> = g.map.values().filter(|s| s.repo_path == repo).map(|s| s.id).collect();
-        for id in ids {
-            g.map.remove(&id);
-            g.order.retain(|&i| i != id);
+        *g.gens.entry(key.clone()).or_default() += 1;
+        if let Some(q) = g.order.remove(&key) {
+            for id in q {
+                g.map.remove(&id);
+            }
         }
     }
 }
 
 pub fn load_log(store: &SnapshotStore, repo: &str, scope: LogScope, favs: &Favorites) -> Result<LogSnapshot> {
     let started = Instant::now();
+    let key = canonical_key(repo);
+    let gen_at_start = store.generation(&key);
     let mut refs = read_refs(repo, favs)?;
     let revs = scope_revs(&scope.refs, refs.head.unborn)?;
     let read_limit = scope.limit.map(|l| l.saturating_add(1));
@@ -108,7 +143,9 @@ pub fn load_log(store: &SnapshotStore, repo: &str, scope: LogScope, favs: &Favor
     let timestamps: Vec<i64> = records.iter().map(|r| r.committer_time).collect();
     let id = store.next_id();
     let commit_count = records.len() as u32;
-    store.insert(Snapshot { id, repo_path: repo.to_string(), revs, records, hash_index });
+    if store.insert_if_current(Snapshot { id, repo_path: repo.to_string(), key, revs, records, hash_index }, gen_at_start).is_none() {
+        return Err(AppError::new(ErrorCode::SnapshotExpired, "repository was closed while the log was loading"));
+    }
     Ok(LogSnapshot {
         snapshot_id: id,
         repo_path: repo.to_string(),
@@ -160,7 +197,11 @@ pub fn authors(snap: &Snapshot) -> Vec<AuthorInfo> {
 }
 
 fn path_matches(snap: &Snapshot, paths: &[String]) -> Result<HashSet<u32>> {
-    let mut args: Vec<String> = vec!["log".into(), "--format=%H".into(), "--full-history".into(), "--simplify-merges".into()];
+    if snap.revs.is_empty() {
+        // unborn repo: nothing to match (a bare `git log -- paths` would try HEAD and fail)
+        return Ok(HashSet::new());
+    }
+    let mut args: Vec<String> = vec!["--literal-pathspecs".into(), "log".into(), "--format=%H".into(), "--full-history".into(), "--simplify-merges".into()];
     args.extend(snap.revs.iter().cloned());
     args.push("--".into());
     args.extend(paths.iter().cloned());
