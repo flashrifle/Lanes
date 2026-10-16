@@ -25,6 +25,7 @@ pub fn run() {
             commands::open_repo,
             commands::close_repo,
             commands::get_recent_repos,
+            commands::get_system_locale,
             commands::remove_recent_repo,
             commands::get_refs,
             commands::set_favorite,

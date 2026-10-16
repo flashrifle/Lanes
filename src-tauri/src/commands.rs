@@ -145,6 +145,11 @@ pub async fn get_file_diff(repo_path: String, request: DiffRequest) -> Result<Fi
 }
 
 #[tauri::command]
+pub fn get_system_locale() -> Option<String> {
+    sys_locale::get_locale()
+}
+
+#[tauri::command]
 pub async fn validate_branch_name(repo_path: String, name: String) -> Result<BranchNameCheck> {
     blocking(move || ops::validate_branch_name(&repo_path, &name)).await
 }

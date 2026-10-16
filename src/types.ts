@@ -284,6 +284,8 @@ export interface CommandMap {
   open_repo: [{ path: string }, RepoInfo];
   close_repo: [{ repoPath: string }, null];
   get_recent_repos: [Record<string, never>, RecentRepo[]];
+  /** System UI locale (BCP-47, e.g. "ko-KR"), or null when unknown. Same source as the native menu language. */
+  get_system_locale: [Record<string, never>, string | null];
   remove_recent_repo: [{ path: string }, null];
   get_refs: [{ repoPath: string }, RefsSnapshot];
   set_favorite: [{ repoPath: string; fullName: string; favorite: boolean }, null];

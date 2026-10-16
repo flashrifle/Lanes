@@ -71,7 +71,7 @@ fn strings(lang: Lang) -> Strings {
             minimize: "최소화",
             zoom: "확대/축소",
             help: "도움말",
-            credits: "IntelliJ Platform VCS 로그 그래프 엔진을 기반으로 합니다.\nApache License 2.0",
+            credits: "IntelliJ Platform 그래프 엔진 기반 · Apache-2.0",
         },
         Lang::En => Strings {
             about: format!("About {APP_NAME}"),
@@ -95,7 +95,7 @@ fn strings(lang: Lang) -> Strings {
             minimize: "Minimize",
             zoom: "Zoom",
             help: "Help",
-            credits: "Commit graph engine derived from the IntelliJ Platform VCS log.\nApache License 2.0",
+            credits: "Graph engine derived from IntelliJ Platform · Apache-2.0",
         },
     }
 }
@@ -107,7 +107,8 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         version: Some(app.package_info().version.to_string()),
         copyright: app.config().bundle.copyright.clone(),
         credits: Some(s.credits.into()),
-        icon: app.default_window_icon().cloned(),
+        // The default window icon is the 32px one, which looks tiny in the About panel.
+        icon: Some(tauri::include_image!("icons/128x128.png")),
         ..Default::default()
     };
 
