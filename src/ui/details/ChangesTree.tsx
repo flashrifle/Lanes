@@ -6,6 +6,7 @@ import { selectedInRowOrder } from '../state/logic';
 import { useRepo, useRepoStore } from '../state/repoContext';
 import { rowMapOf } from '../state/repoStore';
 import { buildFileTree, fileExt, type FileTreeNode } from './fileTree';
+import { openDiffWindow } from '../../diffwindow/session';
 
 const STATUS_CLASS: Record<ChangedFile['status'], string> = {
   added: 'st-added', modified: 'st-modified', deleted: 'st-deleted', renamed: 'st-renamed', copied: 'st-added',
@@ -16,7 +17,7 @@ const STATUS_CLASS: Record<ChangedFile['status'], string> = {
 export const MAX_CHANGES_COMMITS = 500;
 
 export function ChangesTree() {
-  const { openDiff } = useRepoStore();
+  const store = useRepoStore();
   const repo = useRepo((s) => s.repo);
   const snapshot = useRepo((s) => s.snapshot);
   const layout = useRepo((s) => s.layout);
@@ -33,6 +34,15 @@ export function ChangesTree() {
     return selectedInRowOrder(selection, rowMapOf(layout)).map((i) => snapshot.hashes[i]);
   }, [snapshot, layout, selection, tooMany]);
   const key = useMemo(() => hashes.join(','), [hashes]);
+
+  // Opens (or reuses) the separate side-by-side diff window, with the whole change list for ←/→ navigation.
+  const openDiff = (f: ChangedFile) => {
+    if (!repo || !result) return;
+    const files = result.files;
+    const title = hashes.length === 1 ? hashes[0].slice(0, 8) : `${hashes.length}개 커밋`;
+    openDiffWindow({ repoPath: repo.path, repoName: repo.name, files, index: Math.max(0, files.indexOf(f)), title })
+      .catch((e) => store.showToast('error', `Diff 창을 열 수 없습니다: ${toAppError(e).message}`));
+  };
 
   useEffect(() => {
     if (!repo || hashes.length === 0) { setResult(null); setError(null); setBusy(false); return; }

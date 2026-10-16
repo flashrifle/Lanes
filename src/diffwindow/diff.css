@@ -1,0 +1,320 @@
+/* Diff window (JetBrains New UI dark look). Everything scoped under .dw-* */
+.dw-root {
+  --dw-bg: #1e1f22;
+  --dw-panel: #2b2d30;
+  --dw-border: #393b40;
+  --dw-text: #bcbec4;
+  --dw-text-hi: #dfe1e5;
+  --dw-muted: #6f737a;
+  --dw-ln: #4b5059;
+  --dw-accent: #548af7;
+  --dw-hover: #393b40;
+
+  --dw-mod: #233042;
+  --dw-mod-w: #34507a;
+  --dw-mod-edge: #3d5b85;
+  --dw-ins: #283a2c;
+  --dw-ins-w: #3b5f40;
+  --dw-ins-edge: #46744d;
+  --dw-del: #35373b;
+  --dw-del-w: #4e5157;
+  --dw-del-edge: #5d6067;
+  --dw-udel: #3d2e30;
+  --dw-udel-w: #643a3e;
+  --dw-udel-edge: #7a4449;
+
+  --dw-mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --dw-font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--dw-bg);
+  color: var(--dw-text);
+  font: 13px/1.4 var(--dw-font);
+  user-select: none;
+  -webkit-user-select: none;
+  color-scheme: dark;
+}
+body:has(.dw-root) { margin: 0; background: #1e1f22; overflow: hidden; }
+
+/* ───────── toolbar ───────── */
+.dw-toolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 38px;
+  padding: 0 8px;
+  background: var(--dw-panel);
+  border-bottom: 1px solid var(--dw-border);
+  flex-shrink: 0;
+}
+.dw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #ced0d6;
+  cursor: pointer;
+  padding: 0;
+}
+.dw-btn:hover:not(:disabled) { background: var(--dw-hover); }
+.dw-btn:disabled { color: #5a5d63; cursor: default; }
+.dw-btn.on { background: #3a4354; color: #fff; }
+.dw-sep { width: 1px; height: 18px; background: var(--dw-border); margin: 0 6px; }
+.dw-filepos {
+  border: 0;
+  background: transparent;
+  color: var(--dw-text-hi);
+  font: inherit;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dw-filepos:hover, .dw-filepos.on { background: var(--dw-hover); }
+.dw-grow { flex: 1; }
+.dw-hint { margin-left: 10px; color: #c9a26d; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dw-count { color: var(--dw-muted); margin-right: 10px; white-space: nowrap; }
+.dw-seg {
+  display: inline-flex;
+  border: 1px solid var(--dw-border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-right: 4px;
+}
+.dw-seg button {
+  border: 0;
+  background: transparent;
+  color: var(--dw-text);
+  font: 12px var(--dw-font);
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.dw-seg button + button { border-left: 1px solid var(--dw-border); }
+.dw-seg button.on { background: #3a4354; color: #fff; }
+
+/* popovers */
+.dw-pop {
+  position: absolute;
+  top: 36px;
+  z-index: 20;
+  background: #2b2d30;
+  border: 1px solid #43454a;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 5px;
+  max-height: 60vh;
+  overflow: auto;
+}
+.dw-pop-files { left: 70px; min-width: 320px; max-width: 70vw; }
+.dw-pop-settings { right: 8px; min-width: 230px; }
+.dw-pop-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--dw-text-hi);
+  font: 13px var(--dw-font);
+  text-align: left;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dw-pop-item:hover { background: var(--dw-hover); }
+.dw-pop-item.on { background: #2e436e; }
+.dw-pop-dir { color: var(--dw-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.dw-st-added { color: #73bd79; }
+.dw-st-deleted { color: #8c8c8c; }
+.dw-st-modified { color: #6c9de8; }
+.dw-st-renamed, .dw-st-copied, .dw-st-typeChanged { color: #6c9de8; }
+.dw-pop-title { color: var(--dw-muted); font-size: 11px; padding: 4px 8px 2px; }
+.dw-pop-check { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; cursor: pointer; color: var(--dw-text-hi); }
+.dw-pop-check:hover { background: var(--dw-hover); }
+.dw-pop-check.dw-disabled { color: var(--dw-muted); cursor: default; }
+.dw-pop-check.dw-disabled:hover { background: transparent; }
+.dw-pop-sep { height: 1px; background: var(--dw-border); margin: 4px 2px; }
+
+/* ───────── file headers ───────── */
+.dw-headers {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 28px;
+  border-bottom: 1px solid var(--dw-border);
+  background: var(--dw-bg);
+  flex-shrink: 0;
+}
+.dw-headers-uni { grid-template-columns: 1fr; }
+.dw-fh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  min-width: 0;
+  color: var(--dw-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dw-fh + .dw-fh { border-left: 1px solid var(--dw-border); }
+.dw-hash { color: var(--dw-text); font-family: var(--dw-mono); font-size: 12px; }
+.dw-path { color: var(--dw-text-hi); overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.dw-fh-muted { font-style: italic; }
+.dw-fh-arrow { color: var(--dw-muted); }
+.dw-fh-meta {
+  position: absolute;
+  right: 10px;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  color: var(--dw-muted);
+  font-size: 11px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--dw-bg) 14px);
+  padding-left: 18px;
+}
+
+.dw-banner {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  font-size: 12px;
+  background: #3d3423;
+  color: #e0c48a;
+  border-bottom: 1px solid #574a2f;
+}
+
+/* ───────── body ───────── */
+.dw-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dw-placeholder {
+  margin: auto;
+  color: var(--dw-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+.dw-placeholder.dw-err { color: #db5c5c; white-space: pre-wrap; }
+
+.dw-viewer { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dw-scroll {
+  --dw-lx: 0;
+  --dw-rx: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  outline: none;
+  font: 13px/20px var(--dw-mono);
+  font-variant-ligatures: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.dw-inner { position: relative; width: 100%; }
+.dw-row { position: absolute; top: 0; left: 0; width: 100%; height: 20px; }
+
+.dw-sbs, .dw-uni {
+  display: grid;
+  grid-template-columns: var(--dw-cols);
+  height: 20px;
+}
+.dw-code { position: relative; overflow: hidden; min-width: 0; }
+.dw-text {
+  white-space: pre;
+  tab-size: 4;
+  padding: 0 10px;
+  color: var(--dw-text);
+  will-change: transform;
+}
+.dw-l .dw-text { transform: translateX(calc(var(--dw-lx) * -1px)); }
+.dw-r .dw-text { transform: translateX(calc(var(--dw-rx) * -1px)); }
+
+.dw-ln {
+  text-align: right;
+  padding: 0 7px;
+  color: var(--dw-ln);
+  font-size: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+  background: var(--dw-bg);
+}
+.dw-ln-r { border-right: 1px solid var(--dw-border); }
+.dw-sbs .dw-ln-l { border-left: 1px solid var(--dw-border); }
+
+/* change tints (code + gutter) */
+.dw-mod { background: var(--dw-mod); }
+.dw-ins { background: var(--dw-ins); }
+.dw-del { background: var(--dw-del); }
+.dw-udel { background: var(--dw-udel); }
+.dw-ln.dw-mod, .dw-ln.dw-ins, .dw-ln.dw-del, .dw-ln.dw-udel { color: #868a91; }
+.dw-fill.dw-mod { background: rgba(35, 48, 66, 0.45); }
+.dw-fill.dw-ins { background: rgba(40, 58, 44, 0.45); }
+.dw-fill.dw-del { background: rgba(53, 55, 59, 0.45); }
+.dw-fill.dw-ln { background: var(--dw-bg); }
+
+.dw-mod .dw-w { background: var(--dw-mod-w); border-radius: 2px; }
+.dw-ins .dw-w { background: var(--dw-ins-w); border-radius: 2px; }
+.dw-del .dw-w { background: var(--dw-del-w); border-radius: 2px; }
+.dw-udel .dw-w { background: var(--dw-udel-w); border-radius: 2px; }
+.dw-text .dw-w { color: var(--dw-text-hi); }
+
+/* block outlines */
+.dw-bstart > .dw-mod { box-shadow: inset 0 1px 0 var(--dw-mod-edge); }
+.dw-bstart > .dw-ins { box-shadow: inset 0 1px 0 var(--dw-ins-edge); }
+.dw-bstart > .dw-del { box-shadow: inset 0 1px 0 var(--dw-del-edge); }
+.dw-bstart > .dw-udel { box-shadow: inset 0 1px 0 var(--dw-udel-edge); }
+.dw-bend > .dw-mod { box-shadow: inset 0 -1px 0 var(--dw-mod-edge); }
+.dw-bend > .dw-ins { box-shadow: inset 0 -1px 0 var(--dw-ins-edge); }
+.dw-bend > .dw-del { box-shadow: inset 0 -1px 0 var(--dw-del-edge); }
+.dw-bend > .dw-udel { box-shadow: inset 0 -1px 0 var(--dw-udel-edge); }
+.dw-bstart.dw-bend > .dw-mod { box-shadow: inset 0 1px 0 var(--dw-mod-edge), inset 0 -1px 0 var(--dw-mod-edge); }
+.dw-bstart.dw-bend > .dw-ins { box-shadow: inset 0 1px 0 var(--dw-ins-edge), inset 0 -1px 0 var(--dw-ins-edge); }
+.dw-bstart.dw-bend > .dw-del { box-shadow: inset 0 1px 0 var(--dw-del-edge), inset 0 -1px 0 var(--dw-del-edge); }
+.dw-bstart.dw-bend > .dw-udel { box-shadow: inset 0 1px 0 var(--dw-udel-edge), inset 0 -1px 0 var(--dw-udel-edge); }
+.dw-fill { box-shadow: none !important; }
+.dw-fill.dw-code, .dw-fill.dw-ln { box-shadow: none; }
+
+/* current change marker in the gutter */
+.dw-cur > .dw-ln-l { box-shadow: inset 2px 0 0 var(--dw-accent); }
+
+.dw-nonl { color: #c75450; margin-left: 4px; font-size: 11px; }
+
+/* fold / gap rows */
+.dw-foldrow, .dw-gaprow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 20px;
+  border: 0;
+  padding: 0 12px;
+  background: #25272a;
+  border-top: 1px dashed #3a3c41;
+  border-bottom: 1px dashed #3a3c41;
+  box-sizing: border-box;
+  color: var(--dw-muted);
+  font: 12px var(--dw-font);
+  text-align: left;
+}
+.dw-foldrow { cursor: pointer; }
+.dw-foldrow:hover { background: #2d3035; color: var(--dw-text); }
+.dw-fold-ico { font-weight: 700; color: var(--dw-accent); }
+
+/* horizontal bars */
+.dw-hbars { display: flex; flex-shrink: 0; border-top: 1px solid var(--dw-border); background: var(--dw-bg); }
+.dw-hbar { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; height: 12px; font: 13px var(--dw-mono); }
+.dw-hbar > div { height: 1px; }
+.dw-hbar::-webkit-scrollbar { height: 10px; }
+.dw-hbar::-webkit-scrollbar-thumb { background: #4a4d52; border-radius: 5px; }
+.dw-hbar::-webkit-scrollbar-track { background: transparent; }
+.dw-scroll::-webkit-scrollbar { width: 10px; }
+.dw-scroll::-webkit-scrollbar-thumb { background: #4a4d52; border-radius: 5px; }
+.dw-scroll::-webkit-scrollbar-track { background: transparent; }

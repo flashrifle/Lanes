@@ -8,7 +8,6 @@ import { CommitDetailsPanel } from './ui/details/CommitDetailsPanel';
 import { ConfirmDialog } from './ui/dialogs/ConfirmDialog';
 import { CreateBranchDialog } from './ui/dialogs/CreateBranchDialog';
 import { Toast } from './ui/dialogs/Toast';
-import { DiffView } from './ui/diff/DiffView';
 import { SplitPane } from './ui/layout/SplitPane';
 import { FilterBar } from './ui/log/FilterBar';
 import { LogTable } from './ui/log/LogTable';
@@ -71,7 +70,6 @@ function TabOverlays() {
   const toast = useRepo((s) => s.toast);
   return (
     <>
-      <DiffView />
       {dialog?.kind === 'createBranch' && <CreateBranchDialog startPoint={dialog.startPoint} startLabel={dialog.startLabel} />}
       {dialog?.kind === 'confirm' && <ConfirmDialog dialog={dialog} />}
       <Toast toast={toast} onDismiss={store.dismissToast} />
