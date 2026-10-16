@@ -220,3 +220,57 @@ describe('bek sort', () => {
     }
   });
 });
+
+describe('bek sort: GitHub flow (long-lived dev merged into main repeatedly)', () => {
+  // dev: d0 <- d1 <- ... <- d39 (linear, never reset). main starts at d0 and gets 10 GitHub-style
+  // merges M1..M10; Mj = merge(M(j-1), d(4j-1)) so each merge brings in d(4j-4)..d(4j-1).
+  // HEAD = dev (checked out, tip d39 == M10's second parent), main is a favorite.
+  const DEV = 40;
+  const MERGES = 10;
+  type Node = { name: string; ts: number; parents: string[] };
+  const nodes: Node[] = [];
+  const HOUR = 3600;
+  for (let i = 0; i < DEV; i++) nodes.push({ name: `d${i}`, ts: 1_790_000_000 + i * 5 * HOUR, parents: i ? [`d${i - 1}`] : [] });
+  for (let j = 1; j <= MERGES; j++) {
+    const second = 4 * j - 1;
+    nodes.push({ name: `M${j}`, ts: 1_790_000_000 + second * 5 * HOUR + 600, parents: [j === 1 ? 'd0' : `M${j - 1}`, `d${second}`] });
+  }
+  nodes.sort((a, b) => b.ts - a.ts); // --date-order: newest first
+  const idx = new Map(nodes.map((n, i) => [n.name, i]));
+  const parents = nodes.map((n) => n.parents.map((p) => idx.get(p)!));
+  const timestamps = nodes.map((n) => n.ts);
+  const at = (name: string) => idx.get(name)!;
+
+  const variants: [string, ReturnType<typeof ref>[]][] = [
+    ['local only', [ref('dev', at('d39'), { isCurrent: true }), ref('main', at(`M${MERGES}`), { isFavorite: true })]],
+    [
+      'with remotes',
+      [
+        ref('dev', at('d39'), { isCurrent: true }),
+        ref('main', at(`M${MERGES}`), { isFavorite: true }),
+        ref('origin/dev', at('d39'), { type: 'remoteBranch', remote: 'origin' }),
+        ref('origin/main', at(`M${MERGES}`), { type: 'remoteBranch', remote: 'origin' }),
+      ],
+    ],
+  ];
+
+  for (const [label, refs] of variants) {
+    it(`interleaves each merge with the commits it merged (${label})`, () => {
+      const l = build(snapshot(parents, { timestamps, refs }), { sortType: 'bek' });
+      expect(checkInvariant(l)).toBeNull();
+      expect(l.maxLaneCount).toBeLessThanOrEqual(3);
+      const rowOfName = (name: string) => l.rowOf(at(name));
+      for (let j = MERGES; j >= 1; j--) {
+        const top = rowOfName(`M${j}`);
+        const bottom = j === 1 ? rowOfName('d0') : rowOfName(`M${j - 1}`);
+        const between = new Set<string>();
+        for (let r = top + 1; r < bottom; r++) between.add(nodes[l.commitIndexAt(r)].name);
+        const merged = new Set([4 * j - 4, 4 * j - 3, 4 * j - 2, 4 * j - 1].filter((i) => i > 0).map((i) => `d${i}`));
+        expect(between).toEqual(merged);
+      }
+      // main stays in one lane, dev in the next; no staircase
+      for (let j = 1; j <= MERGES; j++) expect(l.getRow(rowOfName(`M${j}`)).nodeLane).toBe(0);
+      for (let i = 1; i < DEV; i++) expect(l.getRow(rowOfName(`d${i}`)).nodeLane).toBeLessThanOrEqual(1);
+    });
+  }
+});

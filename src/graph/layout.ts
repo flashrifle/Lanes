@@ -28,35 +28,43 @@ export interface HeadInfo {
   readonly pinnedCommit: number;
 }
 
-const RANK_NONE = 127;
-
-function refRank(r: Ref): number {
-  if (r.isCurrent) return 0;
-  if (r.isFavorite) return 1;
+/**
+ * Branch layout priority, port of git4idea GitRefManager.GitBranchLayoutComparator:
+ * origin/main|master > other remote branches > local main|master > other local branches > tags > HEAD.
+ * (IntelliJ ranks CURRENT_BRANCH after tags, but its layout comparator never yields that type, so the
+ * current branch is an ordinary local branch here too.) Favorites and the current branch do NOT affect
+ * layout order -- putting the checked-out branch first lays e.g. a long-lived `dev` out before `main`
+ * and makes Bek sort stack every GitHub-flow merge commit on top of each other.
+ */
+function layoutRank(r: Ref): number {
   switch (r.type) {
-    case 'head': return 0;
-    case 'localBranch': return 2;
-    case 'remoteBranch': return 3;
-    case 'tag': return 4;
+    case 'remoteBranch':
+      return r.name === 'origin/main' || r.name === 'origin/master' ? 0 : 1;
+    case 'localBranch':
+      return r.name === 'main' || r.name === 'master' ? 2 : 3;
+    case 'tag':
+      return 4;
+    case 'head':
+      return 6;
   }
-  return 5;
+  return 7;
 }
 
-/** Priority used to pick the ref that names a head (for colors); 'HEAD' itself is last resort. */
-function refKeyRank(r: Ref): number {
-  if (r.type === 'head') return 10;
-  return refRank(r);
+/** GitRefComparator: rank, then name. Negative if a goes first. */
+function compareRefs(a: Ref, b: Ref): number {
+  const d = layoutRank(a) - layoutRank(b);
+  if (d !== 0) return d;
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
 }
 
 /**
- * Head priority: current branch > favorites > other local > remote > tags > childless commits;
- * ties by snapshot index.
+ * Head order (HeadCommitsComparator + RefsModel.getRefForHeadCommit): every commit carrying a ref and
+ * every childless commit is a candidate head; each is represented by its best ref under the branch layout
+ * comparator; heads with refs come first in that order, then ref-less heads by snapshot index.
  */
 export function computeHeads(g: CommitGraph, refs: readonly Ref[]): HeadInfo {
   const n = g.n;
-  const rank = new Uint8Array(n).fill(RANK_NONE);
-  const refKey = new Map<number, string>();
-  const keyRank = new Map<number, number>();
+  const best = new Map<number, Ref>();
   let currentBranchCommit = -1;
   let mainCommit = -1;
   let masterCommit = -1;
@@ -64,28 +72,29 @@ export function computeHeads(g: CommitGraph, refs: readonly Ref[]): HeadInfo {
   for (const r of refs) {
     const c = r.index;
     if (c == null || !(c >= 0 && c < n)) continue;
-    const rr = refRank(r);
-    if (rr < rank[c]) rank[c] = rr;
-    const kr = refKeyRank(r);
-    const prev = keyRank.get(c);
-    if (prev === undefined || kr < prev) {
-      keyRank.set(c, kr);
-      refKey.set(c, r.fullName);
-    }
+    const prev = best.get(c);
+    if (prev === undefined || compareRefs(r, prev) < 0) best.set(c, r);
     if (r.type === 'localBranch' && r.isCurrent) currentBranchCommit = c;
     if (r.fullName === 'refs/heads/main') mainCommit = c;
     if (r.fullName === 'refs/heads/master') masterCommit = c;
   }
 
-  const cand: number[] = [];
+  const withRef: number[] = [];
+  const noRef: number[] = [];
   for (let c = 0; c < n; c++) {
-    if (rank[c] === RANK_NONE && g.childStart[c] === g.childStart[c + 1]) rank[c] = 5;
-    if (rank[c] !== RANK_NONE) cand.push(c);
+    if (best.has(c)) withRef.push(c);
+    else if (g.childStart[c] === g.childStart[c + 1]) noRef.push(c);
   }
-  cand.sort((a, b) => rank[a] - rank[b] || a - b);
+  withRef.sort((a, b) => compareRefs(best.get(a)!, best.get(b)!) || a - b);
+
+  const refKey = new Map<number, string>();
+  for (const [c, r] of best) refKey.set(c, r.fullName);
 
   const pinnedCommit = currentBranchCommit >= 0 ? currentBranchCommit : mainCommit >= 0 ? mainCommit : masterCommit;
-  return { sortedHeads: Int32Array.from(cand), refKey, pinnedCommit };
+  const sortedHeads = new Int32Array(withRef.length + noRef.length);
+  sortedHeads.set(withRef, 0);
+  sortedHeads.set(noRef, withRef.length);
+  return { sortedHeads, refKey, pinnedCommit };
 }
 
 export function buildLayout(g: CommitGraph, sortedHeads: Int32Array): GraphLayoutData {

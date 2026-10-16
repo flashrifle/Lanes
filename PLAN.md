@@ -65,7 +65,7 @@ Events: `"repo-changed"` → RepoChangedEvent; `"git-progress"` → GitProgressE
 ## Graph engine (`src/graph/`)
 Public API: `export function buildGraph(snapshot: LogSnapshot, options: GraphOptions): GraphLayout;`
 Uses `parents`, `timestamps`, `refs.refs` (`index`, `type`, `isCurrent`, `isFavorite`, `fullName`).
-Head priority for layout/colors: current branch > favorites > other local > remote > tags > childless commits; ties by row.
+Head priority for layout (IntelliJ GitBranchLayoutComparator): origin/main|master > other remote branches > local main|master > other local branches > tags > HEAD > childless commits; ties by name. Current branch (else main/master) is pinned to color 0.
 
 Pipeline (port of intellij-community `platform/vcs-log/graph`):
 1. PermanentLinearGraph: CSR Int32Arrays for down edges (parents) and up edges (children). Parent -1 → "not loaded" edge: down segment + down arrow.
