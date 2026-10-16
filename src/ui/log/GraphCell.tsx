@@ -113,17 +113,27 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
   ctx.lineJoin = 'miter';
-  // Chevron arrows (truncated long edges / unloaded parents), same weight as the lines.
-  const a = lineW * 1.05;
+  // Arrows (truncated long edges / unloaded parents): a solid equilateral triangle centred on the row, its base
+  // flush with the incoming line so the two read as one arrow rather than a chevron sitting on a line.
+  const side = lineW * 2.4;
+  const h = (side * Math.sqrt(3)) / 2;
   for (const ar of row.arrows) {
     const x = laneX(m, ar.lane);
     const s = ar.dir === 'down' ? 1 : -1;
-    ctx.strokeStyle = colorOf(ar.color);
+    const tip = mid + (s * h) / 2;
+    const base = mid - (s * h) / 2;
+    // Casing only on the two slanted sides: the base meets the incoming line and must not show a seam.
     ctx.beginPath();
-    ctx.moveTo(x - a, mid - s * a * 0.55);
-    ctx.lineTo(x, mid + s * a * 0.55);
-    ctx.lineTo(x + a, mid - s * a * 0.55);
+    ctx.moveTo(x - side / 2, base);
+    ctx.lineTo(x, tip);
+    ctx.lineTo(x + side / 2, base);
+    ctx.lineJoin = 'miter';
+    ctx.strokeStyle = casing;
+    ctx.lineWidth = CASING * 2;
     ctx.stroke();
+    ctx.closePath();
+    ctx.fillStyle = colorOf(ar.color);
+    ctx.fill();
   }
   const nx = laneX(m, row.nodeLane);
   const color = colorOf(row.nodeColor);
