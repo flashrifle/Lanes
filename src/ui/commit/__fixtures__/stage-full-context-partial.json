@@ -1,0 +1,191 @@
+{
+  "before": "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\n",
+  "after": "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\ntwenty\nline 21\nline 22\nline 23\nline 24\nline 25\n",
+  "diff": {
+    "path": "f.txt",
+    "oldPath": null,
+    "binary": false,
+    "oldMode": "100644",
+    "newMode": "100644",
+    "hunks": [
+      {
+        "header": "@@ -1,25 +1,25 @@",
+        "oldStart": 1,
+        "oldLines": 25,
+        "newStart": 1,
+        "newLines": 25,
+        "lines": [
+          {
+            "kind": "context",
+            "oldLine": 1,
+            "newLine": 1,
+            "text": "line 1"
+          },
+          {
+            "kind": "context",
+            "oldLine": 2,
+            "newLine": 2,
+            "text": "line 2"
+          },
+          {
+            "kind": "del",
+            "oldLine": 3,
+            "newLine": null,
+            "text": "line 3"
+          },
+          {
+            "kind": "add",
+            "oldLine": null,
+            "newLine": 3,
+            "text": "three"
+          },
+          {
+            "kind": "context",
+            "oldLine": 4,
+            "newLine": 4,
+            "text": "line 4"
+          },
+          {
+            "kind": "context",
+            "oldLine": 5,
+            "newLine": 5,
+            "text": "line 5"
+          },
+          {
+            "kind": "context",
+            "oldLine": 6,
+            "newLine": 6,
+            "text": "line 6"
+          },
+          {
+            "kind": "context",
+            "oldLine": 7,
+            "newLine": 7,
+            "text": "line 7"
+          },
+          {
+            "kind": "context",
+            "oldLine": 8,
+            "newLine": 8,
+            "text": "line 8"
+          },
+          {
+            "kind": "context",
+            "oldLine": 9,
+            "newLine": 9,
+            "text": "line 9"
+          },
+          {
+            "kind": "context",
+            "oldLine": 10,
+            "newLine": 10,
+            "text": "line 10"
+          },
+          {
+            "kind": "context",
+            "oldLine": 11,
+            "newLine": 11,
+            "text": "line 11"
+          },
+          {
+            "kind": "context",
+            "oldLine": 12,
+            "newLine": 12,
+            "text": "line 12"
+          },
+          {
+            "kind": "context",
+            "oldLine": 13,
+            "newLine": 13,
+            "text": "line 13"
+          },
+          {
+            "kind": "context",
+            "oldLine": 14,
+            "newLine": 14,
+            "text": "line 14"
+          },
+          {
+            "kind": "context",
+            "oldLine": 15,
+            "newLine": 15,
+            "text": "line 15"
+          },
+          {
+            "kind": "context",
+            "oldLine": 16,
+            "newLine": 16,
+            "text": "line 16"
+          },
+          {
+            "kind": "context",
+            "oldLine": 17,
+            "newLine": 17,
+            "text": "line 17"
+          },
+          {
+            "kind": "context",
+            "oldLine": 18,
+            "newLine": 18,
+            "text": "line 18"
+          },
+          {
+            "kind": "context",
+            "oldLine": 19,
+            "newLine": 19,
+            "text": "line 19"
+          },
+          {
+            "kind": "del",
+            "oldLine": 20,
+            "newLine": null,
+            "text": "line 20"
+          },
+          {
+            "kind": "add",
+            "oldLine": null,
+            "newLine": 20,
+            "text": "twenty"
+          },
+          {
+            "kind": "context",
+            "oldLine": 21,
+            "newLine": 21,
+            "text": "line 21"
+          },
+          {
+            "kind": "context",
+            "oldLine": 22,
+            "newLine": 22,
+            "text": "line 22"
+          },
+          {
+            "kind": "context",
+            "oldLine": 23,
+            "newLine": 23,
+            "text": "line 23"
+          },
+          {
+            "kind": "context",
+            "oldLine": 24,
+            "newLine": 24,
+            "text": "line 24"
+          },
+          {
+            "kind": "context",
+            "oldLine": 25,
+            "newLine": 25,
+            "text": "line 25"
+          }
+        ]
+      }
+    ],
+    "truncated": false
+  },
+  "selection": [
+    "0:20",
+    "0:21"
+  ],
+  "mode": "stage",
+  "patch": "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1,25 +1,25 @@\n line 1\n line 2\n line 3\n line 4\n line 5\n line 6\n line 7\n line 8\n line 9\n line 10\n line 11\n line 12\n line 13\n line 14\n line 15\n line 16\n line 17\n line 18\n line 19\n-line 20\n+twenty\n line 21\n line 22\n line 23\n line 24\n line 25\n"
+}

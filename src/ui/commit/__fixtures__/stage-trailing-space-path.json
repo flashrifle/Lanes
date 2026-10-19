@@ -1,0 +1,46 @@
+{
+  "before": "a\nb\n",
+  "after": "a\nb\nc\n",
+  "diff": {
+    "path": "trail ",
+    "oldPath": null,
+    "binary": false,
+    "oldMode": "100644",
+    "newMode": "100644",
+    "hunks": [
+      {
+        "header": "@@ -1,2 +1,3 @@",
+        "oldStart": 1,
+        "oldLines": 2,
+        "newStart": 1,
+        "newLines": 3,
+        "lines": [
+          {
+            "kind": "context",
+            "oldLine": 1,
+            "newLine": 1,
+            "text": "a"
+          },
+          {
+            "kind": "context",
+            "oldLine": 2,
+            "newLine": 2,
+            "text": "b"
+          },
+          {
+            "kind": "add",
+            "oldLine": null,
+            "newLine": 3,
+            "text": "c"
+          }
+        ]
+      }
+    ],
+    "truncated": false
+  },
+  "selection": [
+    "0:2"
+  ],
+  "mode": "stage",
+  "patch": "diff --git \"a/trail \" \"b/trail \"\n--- \"a/trail \"\n+++ \"b/trail \"\n@@ -1,2 +1,3 @@\n a\n b\n+c\n"
+}

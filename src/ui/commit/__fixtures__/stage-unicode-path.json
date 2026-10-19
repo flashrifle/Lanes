@@ -1,0 +1,40 @@
+{
+  "before": "a\n",
+  "after": "a\nb\n",
+  "diff": {
+    "path": "한글/파일.txt",
+    "oldPath": null,
+    "binary": false,
+    "oldMode": "100644",
+    "newMode": "100644",
+    "hunks": [
+      {
+        "header": "@@ -1,1 +1,2 @@",
+        "oldStart": 1,
+        "oldLines": 1,
+        "newStart": 1,
+        "newLines": 2,
+        "lines": [
+          {
+            "kind": "context",
+            "oldLine": 1,
+            "newLine": 1,
+            "text": "a"
+          },
+          {
+            "kind": "add",
+            "oldLine": null,
+            "newLine": 2,
+            "text": "b"
+          }
+        ]
+      }
+    ],
+    "truncated": false
+  },
+  "selection": [
+    "0:1"
+  ],
+  "mode": "stage",
+  "patch": "diff --git a/한글/파일.txt b/한글/파일.txt\n--- a/한글/파일.txt\n+++ b/한글/파일.txt\n@@ -1,1 +1,2 @@\n a\n+b\n"
+}

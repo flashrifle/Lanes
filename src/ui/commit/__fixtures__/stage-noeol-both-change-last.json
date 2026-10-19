@@ -1,0 +1,65 @@
+{
+  "before": "a\nb\nc",
+  "after": "a\nb\nC",
+  "diff": {
+    "path": "f.txt",
+    "oldPath": null,
+    "binary": false,
+    "oldMode": "100644",
+    "newMode": "100644",
+    "hunks": [
+      {
+        "header": "@@ -1,3 +1,3 @@",
+        "oldStart": 1,
+        "oldLines": 3,
+        "newStart": 1,
+        "newLines": 3,
+        "lines": [
+          {
+            "kind": "context",
+            "oldLine": 1,
+            "newLine": 1,
+            "text": "a"
+          },
+          {
+            "kind": "context",
+            "oldLine": 2,
+            "newLine": 2,
+            "text": "b"
+          },
+          {
+            "kind": "del",
+            "oldLine": 3,
+            "newLine": null,
+            "text": "c"
+          },
+          {
+            "kind": "noNewline",
+            "oldLine": null,
+            "newLine": null,
+            "text": "No newline at end of file"
+          },
+          {
+            "kind": "add",
+            "oldLine": null,
+            "newLine": 3,
+            "text": "C"
+          },
+          {
+            "kind": "noNewline",
+            "oldLine": null,
+            "newLine": null,
+            "text": "No newline at end of file"
+          }
+        ]
+      }
+    ],
+    "truncated": false
+  },
+  "selection": [
+    "0:2",
+    "0:4"
+  ],
+  "mode": "stage",
+  "patch": "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1,3 +1,3 @@\n a\n b\n-c\n\\ No newline at end of file\n+C\n\\ No newline at end of file\n"
+}

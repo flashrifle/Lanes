@@ -1,0 +1,47 @@
+{
+  "before": "a\nb\n",
+  "after": "a\nB\n",
+  "diff": {
+    "path": "dir/we\"ird\\name.txt",
+    "oldPath": null,
+    "binary": false,
+    "oldMode": "100644",
+    "newMode": "100644",
+    "hunks": [
+      {
+        "header": "@@ -1,2 +1,2 @@",
+        "oldStart": 1,
+        "oldLines": 2,
+        "newStart": 1,
+        "newLines": 2,
+        "lines": [
+          {
+            "kind": "context",
+            "oldLine": 1,
+            "newLine": 1,
+            "text": "a"
+          },
+          {
+            "kind": "del",
+            "oldLine": 2,
+            "newLine": null,
+            "text": "b"
+          },
+          {
+            "kind": "add",
+            "oldLine": null,
+            "newLine": 2,
+            "text": "B"
+          }
+        ]
+      }
+    ],
+    "truncated": false
+  },
+  "selection": [
+    "0:1",
+    "0:2"
+  ],
+  "mode": "stage",
+  "patch": "diff --git \"a/dir/we\\\"ird\\\\name.txt\" \"b/dir/we\\\"ird\\\\name.txt\"\n--- \"a/dir/we\\\"ird\\\\name.txt\"\n+++ \"b/dir/we\\\"ird\\\\name.txt\"\n@@ -1,2 +1,2 @@\n a\n-b\n+B\n"
+}

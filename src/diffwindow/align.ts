@@ -10,6 +10,8 @@ export interface SideLine {
   noNewline: boolean;    // "\ No newline at end of file" applies to this line
   /** Word-level highlight ranges. [] = none; null = word diff unavailable (whole line counts as changed). */
   hl: Range[] | null;
+  /** Add / del lines: selection key "h:l" (FileDiff hunk index : line index) for line staging; null for context. */
+  key: string | null;
 }
 
 export type SbsRow =
@@ -64,7 +66,7 @@ export function displayCols(s: string): number {
   return w;
 }
 
-const mk = (line: number, text: string): SideLine => ({ line, text, noNewline: false, hl: [] });
+const mk = (line: number, text: string, key: string | null = null): SideLine => ({ line, text, noNewline: false, hl: [], key });
 
 /** Split ranges over a '\n'-joined text into per-line ranges (offsets relative to each line). */
 function splitRanges(lines: string[], ranges: Range[]): Range[][] {
@@ -216,7 +218,7 @@ export function buildDiffModel(diff: FileDiff): DiffModel {
   };
 
   let expectOld = 1;
-  for (const h of diff.hunks) {
+  diff.hunks.forEach((h, hi) => {
     const firstOld = h.oldLines === 0 ? h.oldStart + 1 : h.oldStart;
     const gap = firstOld - expectOld;
     if (gap > 0) {
@@ -226,7 +228,7 @@ export function buildDiffModel(diff: FileDiff): DiffModel {
     }
     expectOld = firstOld + h.oldLines;
 
-    for (const dl of h.lines) {
+    h.lines.forEach((dl, li) => {
       switch (dl.kind) {
         case 'context': {
           flush();
@@ -240,7 +242,7 @@ export function buildDiffModel(diff: FileDiff): DiffModel {
           break;
         }
         case 'del': {
-          const l = mk(dl.oldLine ?? 0, dl.text);
+          const l = mk(dl.oldLine ?? 0, dl.text, `${hi}:${li}`);
           // a del after adds starts a new block only if git emitted add-then-del (rare); keep grouping.
           dels.push(l);
           leftCols = Math.max(leftCols, displayCols(dl.text));
@@ -248,7 +250,7 @@ export function buildDiffModel(diff: FileDiff): DiffModel {
           break;
         }
         case 'add': {
-          const r = mk(dl.newLine ?? 0, dl.text);
+          const r = mk(dl.newLine ?? 0, dl.text, `${hi}:${li}`);
           adds.push(r);
           rightCols = Math.max(rightCols, displayCols(dl.text));
           lastTouched = [r];
@@ -258,9 +260,9 @@ export function buildDiffModel(diff: FileDiff): DiffModel {
           for (const t of lastTouched) t.noNewline = true;
           break;
       }
-    }
+    });
     flush();
-  }
+  });
   flush();
   return { sbs, uni, blocks, leftCols, rightCols };
 }

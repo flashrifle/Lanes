@@ -1,0 +1,76 @@
+{
+  "before": "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n",
+  "after": "line 1\nline 2\nline 3\nline 4\nline 6\nline 7\nline 8\nline 9\nline 10\n",
+  "diff": {
+    "path": "f.txt",
+    "oldPath": null,
+    "binary": false,
+    "oldMode": "100644",
+    "newMode": "100644",
+    "hunks": [
+      {
+        "header": "@@ -2,7 +2,7 @@",
+        "oldStart": 2,
+        "oldLines": 7,
+        "newStart": 2,
+        "newLines": 7,
+        "lines": [
+          {
+            "kind": "context",
+            "oldLine": 2,
+            "newLine": 2,
+            "text": "line 2"
+          },
+          {
+            "kind": "context",
+            "oldLine": 3,
+            "newLine": 3,
+            "text": "line 3"
+          },
+          {
+            "kind": "context",
+            "oldLine": 4,
+            "newLine": 4,
+            "text": "line 4"
+          },
+          {
+            "kind": "del",
+            "oldLine": 5,
+            "newLine": null,
+            "text": "line 5"
+          },
+          {
+            "kind": "add",
+            "oldLine": null,
+            "newLine": 5,
+            "text": "line five"
+          },
+          {
+            "kind": "context",
+            "oldLine": 6,
+            "newLine": 6,
+            "text": "line 6"
+          },
+          {
+            "kind": "context",
+            "oldLine": 7,
+            "newLine": 7,
+            "text": "line 7"
+          },
+          {
+            "kind": "context",
+            "oldLine": 8,
+            "newLine": 8,
+            "text": "line 8"
+          }
+        ]
+      }
+    ],
+    "truncated": false
+  },
+  "selection": [
+    "0:3"
+  ],
+  "mode": "stage",
+  "patch": "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -2,7 +2,6 @@\n line 2\n line 3\n line 4\n-line 5\n line 6\n line 7\n line 8\n"
+}

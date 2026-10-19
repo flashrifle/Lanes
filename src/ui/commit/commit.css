@@ -1,0 +1,98 @@
+/* ui-commit: working-tree row, Local Changes panel, commit box, stash, operation banner (Metro tokens from App.css). */
+
+/* ───────── "Uncommitted changes (N)" row ───────── */
+.working-row { display: flex; align-items: center; gap: 8px; min-width: 640px; padding: 0 10px 0 6px; white-space: nowrap; border-bottom: 1px dashed var(--border); color: var(--muted-2); }
+.working-row:hover { background: #1A1E29; }
+.working-row.selected { background: var(--sel); color: var(--text); }
+.log-scroll:not(:focus) .working-row.selected { background: var(--sel-inactive); }
+.working-node { flex: none; width: 10px; height: 10px; margin-left: 5px; border-radius: 50%; border: 1.5px dashed var(--muted-2); }
+.working-row.has-conflicts .working-node { border-color: var(--danger); }
+.working-label { font-style: italic; }
+.working-hints { color: var(--muted); font-size: 12px; }
+.working-row.has-conflicts .working-hints { color: var(--danger); }
+
+/* ───────── panel layout ───────── */
+.lc { height: 100%; display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+.lc > .split { flex: 1; min-height: 0; }
+.lc-top { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.lc-top .pane-header { gap: 4px; padding-right: 6px; }
+.lc-spin { margin-right: 4px; }
+.lc-note { padding: 6px 14px; font-size: 12px; color: var(--warn); }
+.lc-note.muted { color: var(--muted); }
+
+.lc-list { flex: 1; min-height: 0; overflow: auto; padding: 4px 6px 8px; outline: 0; }
+.lc-list:focus-visible { box-shadow: inset 0 0 0 1px rgba(76,141,255,.5); }
+
+.lc-group + .lc-group { margin-top: 4px; }
+.lc-group-head { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 4px 0 2px; font: 800 11px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted-2); white-space: nowrap; }
+.lc-group-head .muted { font-family: var(--font); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.lc-group-label { cursor: default; }
+.lc-chev { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; color: var(--muted); border-radius: 4px; }
+.lc-chev:hover { background: var(--hover-2); color: var(--text); }
+.lc-warn { color: var(--danger); }
+.lc-group-conflicts .lc-group-label { color: var(--danger); }
+.lc-conflict-actions { display: inline-flex; gap: 4px; text-transform: none; letter-spacing: 0; font: 500 12px/1 var(--font); }
+.lc-conflict-actions .btn.small { padding: 2px 7px; }
+
+.lc-check { flex: none; width: 13px; height: 13px; margin: 0; accent-color: var(--accent); }
+.lc-check-spacer { flex: none; width: 13px; }
+
+.lc-row { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 6px 0 22px; border-radius: 6px; white-space: nowrap; min-width: 0; }
+.lc-row:hover { background: var(--hover); }
+.lc-row.selected { background: var(--sel-inactive); }
+.lc-list:focus .lc-row.selected { background: var(--sel); }
+.lc-list:focus .lc-row.focused { box-shadow: inset 0 0 0 1px rgba(76,141,255,.6); }
+.lc-row .ct-name { overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 60%; }
+.lc-dir { overflow: hidden; text-overflow: ellipsis; font-size: 12px; min-width: 0; flex: 0 1 auto; }
+.lc-old { font-size: 12px; flex: none; }
+.lc-letter { flex: none; width: 14px; text-align: center; font: 600 11px/1 var(--mono); color: var(--muted); }
+.lc-letter.st-added { color: #5FDC98; }
+.lc-letter.st-modified { color: #86AEFF; }
+.lc-letter.st-deleted { color: var(--muted-2); }
+.lc-letter.st-renamed { color: #E3BD55; }
+.lc-row.st-conflict .ct-name { color: var(--danger); }
+.lc-tag { flex: none; font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--hover-2); color: var(--muted-2); }
+.lc-tag-conflict { background: rgba(216,67,79,.18); color: var(--danger); }
+
+/* ───────── stash ───────── */
+.lc-stash { flex: none; border-top: 1px solid var(--border); padding: 0 6px; }
+.lc-stash-head { padding-left: 2px; }
+.lc-stash-head .btn.small { text-transform: none; letter-spacing: 0; font: 500 12px/1.4 var(--font); }
+.lc-stash-list { max-height: 168px; overflow: auto; padding-bottom: 6px; }
+.lc-stash-row { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 4px 0 22px; border-radius: 6px; white-space: nowrap; }
+.lc-stash-row:hover { background: var(--hover); }
+.lc-stash-ref { flex: none; font: 12px var(--mono); color: var(--muted-2); }
+.lc-stash-msg { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lc-stash-time { flex: none; font-size: 12px; }
+.lc-stash-btns { flex: none; display: none; gap: 4px; }
+.lc-stash-row:hover .lc-stash-btns, .lc-stash-row:focus-within .lc-stash-btns { display: inline-flex; }
+.lc-stash-row:hover .lc-stash-time, .lc-stash-row:focus-within .lc-stash-time { display: none; }
+.lc-stash-btns .btn.small { padding: 1px 7px; }
+
+/* ───────── commit box ───────── */
+.lc-commit { display: flex; flex-direction: column; gap: 6px; height: 100%; min-height: 0; padding: 8px 10px 10px; background: var(--panel); border-top: 1px solid var(--border); }
+.lc-commit-opts { display: flex; align-items: center; gap: 14px; flex: none; font-size: 12px; color: var(--muted-2); }
+.lc-opt { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.lc-opt input { margin: 0; accent-color: var(--accent); }
+.lc-subj-len { font: 11px var(--mono); color: var(--muted); }
+.lc-subj-len.over { color: var(--warn); }
+.lc-message { flex: 1; min-height: 48px; resize: none; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--inset); color: var(--text); font: 13px/1.45 var(--mono); outline: 0; user-select: text; -webkit-user-select: text; }
+.lc-message:focus { border-color: var(--accent); }
+.lc-message:disabled { opacity: .6; }
+.lc-message::placeholder { color: var(--muted); font-family: var(--font); }
+.lc-commit-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.lc-commit-target { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+
+/* ───────── stash dialog ───────── */
+.lc-stash-dialog { display: flex; flex-direction: column; gap: 10px; }
+.lc-stash-dialog h3, .lc-stash-dialog p { margin: 0; }
+.lc-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted-2); }
+.lc-field input { padding: 6px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--inset); color: var(--text); outline: 0; font-size: 13px; }
+.lc-field input:focus { border-color: var(--accent); }
+
+/* ───────── operation banner (repo bar) ───────── */
+.op-banner { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.op-banner-info { color: var(--muted-2); }
+.op-banner-conflicts { color: var(--danger); font-weight: 600; padding: 1px 6px; border-radius: 6px; }
+.op-banner-conflicts:hover { background: rgba(216,67,79,.18); }
+.op-banner .btn.small { padding: 1px 9px; }

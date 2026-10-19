@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref, type UIEvent } from 'react';
 import { buildDisplay, sbsKinds, uniKinds, type BlockType, type DiffModel, type SbsRow, type SideLine, type UniRow } from './align';
 import { t } from '../i18n';
+import { blockKeys, coverage } from './staging';
 
 export const ROW_H = 20;
 
@@ -15,8 +16,15 @@ export interface DiffViewerHandle {
   focus(): void;
 }
 
+/** Line / hunk selection for staging (working-tree diffs only). Keys are FileDiff "h:l". */
+export interface StagingSelection {
+  selected: ReadonlySet<string>;
+  toggle(keys: string[], on: boolean): void;
+}
+
 interface Props {
   model: DiffModel;
+  staging?: StagingSelection | null;
   mode: ViewMode;
   collapse: boolean;
   initialBlock: 'first' | 'last';
@@ -47,7 +55,7 @@ function CodeText({ line }: { line: SideLine }) {
   );
 }
 
-export function DiffViewer({ model, mode, collapse, initialBlock, ref }: Props) {
+export function DiffViewer({ model, mode, collapse, initialBlock, staging = null, ref }: Props) {
   const [expanded, setExpanded] = useState<{ sbs: Set<number>; unified: Set<number> }>(() => ({ sbs: new Set(), unified: new Set() }));
   const kinds = useMemo(() => (mode === 'sbs' ? sbsKinds(model) : uniKinds(model)), [model, mode]);
   const display = useMemo(() => buildDisplay(kinds, { collapse, expanded: expanded[mode] }), [kinds, collapse, expanded, mode]);
@@ -171,6 +179,47 @@ export function DiffViewer({ model, mode, collapse, initialBlock, ref }: Props) 
     return Math.max(3, String(max).length);
   }, [model]);
 
+  const bKeys = useMemo(() => blockKeys(model), [model]);
+  const STAGE_W = '22px';
+
+  /** Stage column cell: tri-state block checkbox on the block's first row. */
+  const stageCell = (block: number, first: boolean) => {
+    if (!staging) return null;
+    if (block < 0 || !first || bKeys[block].length === 0) return <div className="dw-stg" />;
+    const keys = bKeys[block];
+    const cov = coverage(staging.selected, keys);
+    return (
+      <div className="dw-stg">
+        <input
+          type="checkbox"
+          className="dw-stg-box"
+          checked={cov === 'all'}
+          ref={(el) => { if (el) el.indeterminate = cov === 'some'; }}
+          title={t('stage.dw.blockTip')}
+          aria-label={t('stage.dw.blockTip')}
+          onChange={() => staging.toggle(keys, cov !== 'all')}
+        />
+      </div>
+    );
+  };
+  /** Gutter (line number) cell; changed lines are clickable to pick them for staging. */
+  const lnCell = (cls: string, line: SideLine | null) => {
+    const key = staging && line?.key ? line.key : null;
+    if (!key) return <div className={cls}>{line?.line ?? ''}</div>;
+    const on = staging!.selected.has(key);
+    return (
+      <div
+        className={cls + ' dw-pickable' + (on ? ' dw-picked' : '')}
+        role="checkbox"
+        aria-checked={on}
+        title={t('stage.dw.lineTip')}
+        onMouseDown={(e) => { e.preventDefault(); staging!.toggle([key], !on); }}
+      >
+        {line!.line}
+      </div>
+    );
+  };
+
   const curRange = cur >= 0 && cur < blocks.length
     ? (mode === 'sbs' ? [blocks[cur].sbsStart, blocks[cur].sbsEnd] : [blocks[cur].uniStart, blocks[cur].uniEnd])
     : [-1, -1];
@@ -194,8 +243,9 @@ export function DiffViewer({ model, mode, collapse, initialBlock, ref }: Props) 
         <div className={'dw-code dw-l ' + lc}>
           <div className="dw-text">{r.left && <CodeText line={r.left} />}</div>
         </div>
-        <div className={'dw-ln dw-ln-l ' + lc}>{r.left?.line ?? ''}</div>
-        <div className={'dw-ln dw-ln-r ' + rc}>{r.right?.line ?? ''}</div>
+        {lnCell('dw-ln dw-ln-l ' + lc, r.left)}
+        {stageCell(r.block, r.kind === 'change' && rowIdx === blocks[r.block].sbsStart)}
+        {lnCell('dw-ln dw-ln-r ' + rc, r.right)}
         <div className={'dw-code dw-r ' + rc}>
           <div className="dw-text">{r.right && <CodeText line={r.right} />}</div>
         </div>
@@ -216,8 +266,18 @@ export function DiffViewer({ model, mode, collapse, initialBlock, ref }: Props) 
     }
     return (
       <div className={'dw-uni' + edge}>
-        <div className={'dw-ln dw-ln-l ' + c}>{r.oldLine ?? ''}</div>
-        <div className={'dw-ln dw-ln-r ' + c}>{r.newLine ?? ''}</div>
+        {stageCell(r.block, r.kind !== 'equal' && rowIdx === blocks[r.block].uniStart)}
+        {staging && r.kind !== 'equal' && r.line.key ? (
+          <>
+            {lnCell('dw-ln dw-ln-l ' + c, r.kind === 'del' ? r.line : null)}
+            {lnCell('dw-ln dw-ln-r ' + c, r.kind === 'add' ? r.line : null)}
+          </>
+        ) : (
+          <>
+            <div className={'dw-ln dw-ln-l ' + c}>{r.oldLine ?? ''}</div>
+            <div className={'dw-ln dw-ln-r ' + c}>{r.newLine ?? ''}</div>
+          </>
+        )}
         <div className={'dw-code dw-l ' + c}>
           <div className="dw-text"><CodeText line={r.line} /></div>
         </div>
@@ -226,9 +286,10 @@ export function DiffViewer({ model, mode, collapse, initialBlock, ref }: Props) 
   };
 
   const gutterCol = `calc(${digits}ch + 14px)`;
+  const stg = staging ? ` ${STAGE_W}` : '';
   const cols = mode === 'sbs'
-    ? `minmax(0, 1fr) ${gutterCol} ${gutterCol} minmax(0, 1fr)`
-    : `${gutterCol} ${gutterCol} minmax(0, 1fr)`;
+    ? `minmax(0, 1fr) ${gutterCol}${stg} ${gutterCol} minmax(0, 1fr)`
+    : `${staging ? STAGE_W + ' ' : ''}${gutterCol} ${gutterCol} minmax(0, 1fr)`;
 
   return (
     <div className="dw-viewer" style={{ ['--dw-cols' as string]: cols }}>
@@ -258,7 +319,7 @@ export function DiffViewer({ model, mode, collapse, initialBlock, ref }: Props) 
         </div>
         {mode === 'sbs' && (
           <>
-            <div style={{ width: `calc(2 * ${gutterCol})` }} />
+            <div style={{ width: `calc(2 * ${gutterCol}${staging ? ' + ' + STAGE_W : ''})` }} />
             <div className="dw-hbar" ref={rightBar} onScroll={onBarScroll('r')}>
               <div style={{ width: `calc(${model.rightCols}ch + 40px)` }} />
             </div>

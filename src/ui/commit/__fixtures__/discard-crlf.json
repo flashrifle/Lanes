@@ -1,0 +1,46 @@
+{
+  "before": "a\r\nB\r\n",
+  "after": "a\r\n",
+  "diff": {
+    "path": "f.txt",
+    "oldPath": null,
+    "binary": false,
+    "oldMode": "100644",
+    "newMode": "100644",
+    "hunks": [
+      {
+        "header": "@@ -1,2 +1,2 @@",
+        "oldStart": 1,
+        "oldLines": 2,
+        "newStart": 1,
+        "newLines": 2,
+        "lines": [
+          {
+            "kind": "context",
+            "oldLine": 1,
+            "newLine": 1,
+            "text": "a\r"
+          },
+          {
+            "kind": "del",
+            "oldLine": 2,
+            "newLine": null,
+            "text": "b\r"
+          },
+          {
+            "kind": "add",
+            "oldLine": null,
+            "newLine": 2,
+            "text": "B\r"
+          }
+        ]
+      }
+    ],
+    "truncated": false
+  },
+  "selection": [
+    "0:2"
+  ],
+  "mode": "discard",
+  "patch": "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1,1 +1,2 @@\n a\r\n+B\r\n"
+}

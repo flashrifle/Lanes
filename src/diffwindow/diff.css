@@ -324,3 +324,55 @@ body:has(.dw-root) { margin: 0; background: #14161D; overflow: hidden; }
 
 .dw-root :focus-visible { outline: 2px solid var(--dw-accent); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .dw-root * { transition: none !important; animation: none !important; } }
+
+/* ───────── working-tree staging (ui-commit) ───────── */
+.dw-stg { display: flex; align-items: center; justify-content: center; background: var(--dw-bg); border-right: 1px solid var(--dw-border); }
+.dw-sbs .dw-stg { border-left: 0; }
+.dw-stg-box { width: 13px; height: 13px; margin: 0; accent-color: var(--dw-accent); cursor: pointer; }
+.dw-pickable { cursor: pointer; position: relative; }
+.dw-pickable::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  border: 1px solid #59607A;
+}
+.dw-pickable:hover::before { border-color: var(--dw-accent); }
+.dw-picked { color: var(--dw-text-hi) !important; box-shadow: inset 0 0 0 100px rgba(76, 141, 255, 0.16); }
+.dw-picked::before { background: var(--dw-accent); border-color: var(--dw-accent); }
+
+.dw-stagebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 34px;
+  padding: 4px 10px;
+  background: var(--dw-panel);
+  border-bottom: 1px solid var(--dw-border);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.dw-stagebar-side { color: var(--dw-text-hi); font-weight: 600; }
+.dw-stagebar-note { color: var(--dw-muted); }
+.dw-stagebar .dw-grow { flex: 1; }
+.dw-sbtn {
+  border: 1px solid var(--dw-border);
+  background: #20242F;
+  color: var(--dw-text-hi);
+  font: 500 12px/1 var(--dw-font);
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.dw-sbtn:hover:not(:disabled) { background: #2A2F3E; }
+.dw-sbtn:disabled { opacity: .45; cursor: default; }
+.dw-sbtn.primary { background: #2A66E0; border-color: #2A66E0; color: #fff; }
+.dw-sbtn.primary:hover:not(:disabled) { background: #3574EE; }
+.dw-sbtn.danger { background: #D8434F; border-color: #D8434F; color: #fff; }
+.dw-sbtn.link { border-color: transparent; background: transparent; color: #86AEFF; padding: 5px 6px; }
+.dw-banner.dw-banner-err { background: #3A2229; color: #FFC2C8; border-bottom-color: #5A2E38; display: flex; align-items: center; gap: 8px; }
+.dw-banner.dw-banner-warn { display: flex; align-items: center; gap: 8px; }

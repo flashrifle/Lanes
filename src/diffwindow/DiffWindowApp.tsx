@@ -2,8 +2,8 @@
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { call, toAppError } from '../api';
-import type { ChangedFile, FileDiff } from '../types';
+import { call, onRepoChanged, toAppError } from '../api';
+import type { ChangedFile, FileDiff, RepoChangeScope } from '../types';
 import { buildDiffModel, type DiffModel } from './align';
 import { DiffViewer, type DiffViewerHandle, type ViewMode } from './DiffViewer';
 import {
@@ -17,6 +17,10 @@ import {
 import './diff.css';
 import { openHistoryWindow } from '../historywindow/session';
 import { t } from '../i18n';
+import { changeKeys } from '../ui/commit/patch';
+import { isWorkingRev, workingSideOf } from '../ui/commit/workingFiles';
+import { StageBar } from './StageBar';
+import { revLabel, setKeys, stagingCaps } from './staging';
 
 const FULL_CONTEXT = 1_000_000;
 const PREFS_KEY = 'dw-prefs';
@@ -56,7 +60,10 @@ type LoadState =
   | { kind: 'ok'; data: Loaded };
 
 const fileKey = (f: ChangedFile) => `${f.fromHash ?? '∅'}:${f.toHash}:${f.oldPath ?? ''}:${f.path}`;
-const shortHash = (h: string | null) => (h ? h.slice(0, 8) : null);
+const shortHash = (h: string | null) => revLabel(h, { index: t('stage.dw.revIndex'), worktree: t('stage.dw.revWorktree') });
+const isWorkingFile = (f: ChangedFile) => isWorkingRev(f.toHash);
+/** repo-changed scopes that can change a working-tree diff. */
+const WORKING_SCOPES: readonly RepoChangeScope[] = ['index', 'worktree', 'head'];
 
 async function fetchDiff(repoPath: string, f: ChangedFile): Promise<Loaded> {
   const request = { path: f.path, oldPath: f.oldPath, fromHash: f.fromHash, toHash: f.toHash, contextLines: FULL_CONTEXT };
@@ -119,6 +126,10 @@ export default function DiffWindowApp() {
   const viewer = useRef<DiffViewerHandle>(null);
   const cache = useRef(new Map<string, Loaded>());
   const edge = useRef<{ dir: 1 | -1; at: number } | null>(null);
+  /** Bumped to re-fetch working-tree diffs (repo-changed, or after a staging op). */
+  const [tick, setTick] = useState(0);
+  const shown = useRef<{ key: string; ok: boolean }>({ key: '', ok: false });
+  const [stageSel, setStageSel] = useState<ReadonlySet<string>>(new Set());
 
   const files = session?.files ?? [];
   const file: ChangedFile | undefined = files[index];
@@ -156,24 +167,84 @@ export default function DiffWindowApp() {
     const key = fileKey(file);
     const hit = cache.current.get(key);
     if (hit) {
+      shown.current = { key, ok: true };
       setState({ kind: 'ok', data: hit });
       return;
     }
-    setState({ kind: 'loading' });
+    // A working-tree refresh of the file on screen keeps showing the old diff until the new one arrives.
+    const silent = shown.current.key === key && shown.current.ok;
+    if (!silent) {
+      shown.current = { key, ok: false };
+      setState({ kind: 'loading' });
+    }
     let cancelled = false;
     fetchDiff(session.repoPath, file)
       .then((d) => {
         if (cache.current.size > 40) cache.current.clear();
         cache.current.set(key, d);
-        if (!cancelled) setState(d.diff.binary ? { kind: 'binary' } : { kind: 'ok', data: d });
+        if (cancelled) return;
+        shown.current = { key, ok: !d.diff.binary };
+        setState(d.diff.binary ? { kind: 'binary' } : { kind: 'ok', data: d });
       })
       .catch((e) => {
-        if (!cancelled) setState({ kind: 'error', message: toAppError(e).message });
+        if (cancelled) return;
+        shown.current = { key, ok: false };
+        setState({ kind: 'error', message: toAppError(e).message });
       });
     return () => {
       cancelled = true;
     };
-  }, [session, file]);
+  }, [session, file, tick]);
+
+  // working-tree sessions: follow index / worktree / HEAD changes
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const refreshWorking = useCallback(async (headMoved: boolean) => {
+    const s = sessionRef.current;
+    if (!s || !s.files.some(isWorkingFile)) return;
+    for (const f of s.files) if (isWorkingFile(f)) cache.current.delete(fileKey(f));
+    if (headMoved) {
+      // staged / conflict entries diff against HEAD: re-base them on the new HEAD
+      try {
+        const st = await call('get_status', { repoPath: s.repoPath });
+        const cur = sessionRef.current;
+        if (cur !== s) return;
+        const files = s.files.map((f) => {
+          const side = workingSideOf(f);
+          return (side === 'staged' || side === 'conflict') && f.fromHash !== st.headHash ? { ...f, fromHash: st.headHash } : f;
+        });
+        if (files.some((f, i) => f !== s.files[i])) { setSession({ ...s, files }); return; }
+      } catch {
+        /* keep the old base; the refetch below still shows the current index */
+      }
+    }
+    setTick((n) => n + 1);
+  }, []);
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    let dead = false;
+    onRepoChanged((e) => {
+      const s = sessionRef.current;
+      if (!s || e.repoPath !== s.repoPath || !e.scopes.some((x) => WORKING_SCOPES.includes(x))) return;
+      void refreshWorking(e.scopes.includes('head'));
+    })
+      .then((u) => (dead ? u() : (un = u)))
+      .catch(() => {});
+    return () => {
+      dead = true;
+      un?.();
+    };
+  }, [refreshWorking]);
+  // and when the window regains focus (an editor may have saved meanwhile)
+  useEffect(() => {
+    const onFocus = () => void refreshWorking(false);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshWorking]);
+
+  // a new diff invalidates line selection keys
+  const loadedDiff = state.kind === 'ok' ? state.data.diff : null;
+  useEffect(() => { setStageSel(new Set()); }, [loadedDiff]);
 
   // window title
   useEffect(() => {
@@ -288,6 +359,19 @@ export default function DiffWindowApp() {
     return { leftPath, leftMissing, rightMissing, renamed: !!file.oldPath && file.oldPath !== file.path };
   }, [file]);
 
+  // working-tree entries: stage bar + line / hunk picking
+  const caps = useMemo(() => (file ? stagingCaps(file, loadedDiff) : null), [file, loadedDiff]);
+  const lineStaging = !!caps && caps.lineModes.length > 0;
+  const allKeys = useMemo(() => (loadedDiff && lineStaging ? changeKeys(loadedDiff) : []), [loadedDiff, lineStaging]);
+  const staging = useMemo(
+    () => (lineStaging ? { selected: stageSel, toggle: (keys: string[], on: boolean) => setStageSel((s) => setKeys(s, keys, on)) } : null),
+    [lineStaging, stageSel],
+  );
+  const reloadDiff = useCallback(() => {
+    if (file) cache.current.delete(fileKey(file));
+    setTick((n) => n + 1);
+  }, [file]);
+
   if (!session) {
     return (
       <div className="dw-root">
@@ -326,6 +410,7 @@ export default function DiffWindowApp() {
         mode={prefs.mode}
         collapse={prefs.collapse}
         initialBlock={entryBlock}
+        staging={staging}
       />
     );
   }
@@ -374,7 +459,8 @@ export default function DiffWindowApp() {
           disabled={!file}
           onClick={() => {
             if (!file) return;
-            openHistoryWindow({ repoPath: session.repoPath, repoName: session.repoName, path: file.path, rev: file.toHash, selectHash: file.toHash })
+            const working = isWorkingRev(file.toHash);
+            openHistoryWindow({ repoPath: session.repoPath, repoName: session.repoName, path: file.path, rev: working ? null : file.toHash, selectHash: working ? undefined : file.toHash })
               .catch((e) => setHint(t('changes.historyOpenFail', { msg: toAppError(e).message })));
           }}
         >
@@ -476,6 +562,19 @@ export default function DiffWindowApp() {
             {modeNote && <> · {modeNote}</>}
           </div>
         </div>
+      )}
+
+      {file && caps && (
+        <StageBar
+          repoPath={session.repoPath}
+          file={file}
+          diff={loadedDiff}
+          caps={caps}
+          selected={stageSel}
+          allKeys={allKeys}
+          setSelected={setStageSel}
+          reload={reloadDiff}
+        />
       )}
 
       {state.kind === 'ok' && state.data.partial && (

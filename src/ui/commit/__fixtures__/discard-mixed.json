@@ -1,0 +1,101 @@
+{
+  "before": "line 1\nline 2\nL3\nline 4\nline 5\nline 6\nline 7\nline 8\nadded\nline 9\nline 10\n",
+  "after": "line 1\nline 2\nline 3\nL3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n",
+  "diff": {
+    "path": "f.txt",
+    "oldPath": null,
+    "binary": false,
+    "oldMode": "100644",
+    "newMode": "100644",
+    "hunks": [
+      {
+        "header": "@@ -1,10 +1,11 @@",
+        "oldStart": 1,
+        "oldLines": 10,
+        "newStart": 1,
+        "newLines": 11,
+        "lines": [
+          {
+            "kind": "context",
+            "oldLine": 1,
+            "newLine": 1,
+            "text": "line 1"
+          },
+          {
+            "kind": "context",
+            "oldLine": 2,
+            "newLine": 2,
+            "text": "line 2"
+          },
+          {
+            "kind": "del",
+            "oldLine": 3,
+            "newLine": null,
+            "text": "line 3"
+          },
+          {
+            "kind": "add",
+            "oldLine": null,
+            "newLine": 3,
+            "text": "L3"
+          },
+          {
+            "kind": "context",
+            "oldLine": 4,
+            "newLine": 4,
+            "text": "line 4"
+          },
+          {
+            "kind": "context",
+            "oldLine": 5,
+            "newLine": 5,
+            "text": "line 5"
+          },
+          {
+            "kind": "context",
+            "oldLine": 6,
+            "newLine": 6,
+            "text": "line 6"
+          },
+          {
+            "kind": "context",
+            "oldLine": 7,
+            "newLine": 7,
+            "text": "line 7"
+          },
+          {
+            "kind": "context",
+            "oldLine": 8,
+            "newLine": 8,
+            "text": "line 8"
+          },
+          {
+            "kind": "add",
+            "oldLine": null,
+            "newLine": 9,
+            "text": "added"
+          },
+          {
+            "kind": "context",
+            "oldLine": 9,
+            "newLine": 10,
+            "text": "line 9"
+          },
+          {
+            "kind": "context",
+            "oldLine": 10,
+            "newLine": 11,
+            "text": "line 10"
+          }
+        ]
+      }
+    ],
+    "truncated": false
+  },
+  "selection": [
+    "0:2",
+    "0:9"
+  ],
+  "mode": "discard",
+  "patch": "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1,11 +1,11 @@\n line 1\n line 2\n-line 3\n L3\n line 4\n line 5\n line 6\n line 7\n line 8\n+added\n line 9\n line 10\n"
+}
