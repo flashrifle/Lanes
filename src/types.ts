@@ -224,7 +224,7 @@ export interface ChangesResult {
 export interface DiffRequest {
   path: string;
   oldPath: string | null;
-  fromHash: string | null;   // full hash | REV_INDEX | null (= empty tree)
+  fromHash: string | null;   // full hash | 'HEAD' (resolved at request time) | REV_INDEX | null (= empty tree)
   toHash: string;            // full hash | REV_INDEX | REV_WORKTREE
   contextLines: number | null; // default 3
 }
