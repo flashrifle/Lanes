@@ -17,6 +17,7 @@
     "core:window:allow-set-focus",
     "core:window:allow-unminimize",
     "core:window:allow-show",
-    "core:window:allow-close"
+    "core:window:allow-close",
+    "core:window:allow-hide"
   ]
 }

@@ -1,4 +1,4 @@
-use super::runner::{empty_tree, norm_hash, run_capped};
+use super::runner::{check_rel_path, empty_tree, norm_hash, run, run_capped_codes, run_raw};
 use crate::error::{AppError, Result};
 use crate::models::*;
 
@@ -109,16 +109,30 @@ pub fn parse_unified_diff(text: &str, path: &str, old_path: Option<&str>) -> Fil
     d
 }
 
-pub fn file_diff(repo: &str, req: &DiffRequest) -> Result<FileDiff> {
-    if req.path.is_empty() || req.path.contains('\0') {
-        return Err(AppError::invalid("empty path"));
+/// Is `path` known to the index (exact entry)? Literal pathspec.
+fn in_index(repo: &str, path: &str) -> Result<bool> {
+    let o = run(repo, &["--literal-pathspecs", "ls-files", "--cached", "-z", "--", path], true)?;
+    Ok(!o.stdout.is_empty())
+}
+
+/// `fromHash`: a full hash, the literal "HEAD" (resolved now; unborn = empty tree) or null (empty tree).
+fn head_or_empty(repo: &str, from: &Option<String>) -> Result<String> {
+    match from {
+        Some(h) if h == "HEAD" => {
+            let o = run_raw(repo, &["rev-parse", "-q", "--verify", "HEAD^{commit}"], true)?;
+            if o.ok() { Ok(o.text().trim().to_string()) } else { empty_tree(repo) }
+        }
+        Some(h) => norm_hash(h),
+        None => empty_tree(repo),
     }
-    let to = norm_hash(&req.to_hash)?;
-    let base = match &req.from_hash {
-        Some(h) => norm_hash(h)?,
-        None => empty_tree(repo)?,
-    };
-    let ctx = req.context_lines.unwrap_or(3).min(10_000);
+}
+
+pub fn file_diff(repo: &str, req: &DiffRequest) -> Result<FileDiff> {
+    check_rel_path(&req.path)?;
+    if let Some(o) = &req.old_path {
+        check_rel_path(o)?;
+    }
+    let ctx = req.context_lines.unwrap_or(3).min(100_000_000);
     let mut args: Vec<String> = vec![
         "--literal-pathspecs".into(),
         "diff".into(),
@@ -127,15 +141,52 @@ pub fn file_diff(repo: &str, req: &DiffRequest) -> Result<FileDiff> {
         "--no-textconv".into(),
         "-M".into(),
         format!("-U{ctx}"),
-        base,
-        to,
-        "--".into(),
     ];
-    if let Some(o) = &req.old_path {
-        args.push(o.clone());
+    let mut ok_codes: &[i32] = &[0];
+    let from_is_index = req.from_hash.as_deref() == Some(REV_INDEX);
+    let mut untracked = false;
+    match req.to_hash.as_str() {
+        // (head|null, INDEX): staged
+        REV_INDEX => {
+            if from_is_index {
+                return Err(AppError::invalid("INDEX cannot be diffed against itself"));
+            }
+            args.push("--cached".into());
+            args.push(head_or_empty(repo, &req.from_hash)?);
+        }
+        REV_WORKTREE => {
+            if from_is_index {
+                // (INDEX, WORKTREE): unstaged
+            } else if (req.from_hash.is_none() || req.from_hash.as_deref() == Some("HEAD")) && !in_index(repo, &req.path)? {
+                // untracked path
+                untracked = true;
+                ok_codes = &[0, 1];
+                args.push("--no-index".into());
+            } else {
+                // (head|null, WORKTREE): combined
+                args.push(head_or_empty(repo, &req.from_hash)?);
+            }
+        }
+        _ => {
+            if from_is_index {
+                return Err(AppError::invalid("INDEX is only valid with INDEX/WORKTREE targets"));
+            }
+            let to = norm_hash(&req.to_hash)?;
+            args.push(head_or_empty(repo, &req.from_hash)?);
+            args.push(to);
+        }
     }
-    args.push(req.path.clone());
-    let (out, mut truncated) = run_capped(repo, &args, MAX_BYTES)?;
+    args.push("--".into());
+    if untracked {
+        args.push("/dev/null".into());
+        args.push(req.path.clone());
+    } else {
+        if let Some(o) = &req.old_path {
+            args.push(o.clone());
+        }
+        args.push(req.path.clone());
+    }
+    let (out, mut truncated) = run_capped_codes(repo, &args, MAX_BYTES, ok_codes)?;
     let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
     if let Some((idx, _)) = text.match_indices('\n').nth(MAX_LINES) {
         text.truncate(idx);

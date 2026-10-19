@@ -1,0 +1,4 @@
+{
+  "include": "refs/heads/a",
+  "exclude": "refs/heads/b"
+}

@@ -13,5 +13,9 @@
   },
   "paths": [
     "a"
-  ]
+  ],
+  "revRange": {
+    "include": "refs/heads/a",
+    "exclude": "refs/heads/b"
+  }
 }

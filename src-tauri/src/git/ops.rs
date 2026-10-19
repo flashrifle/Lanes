@@ -1,4 +1,5 @@
-//! Write operations. Never force-pushes, never `reset --hard`; force delete only with an explicit flag.
+//! Write operations. Never `push --force` (force-with-lease only with an explicit expected hash); `reset --hard`
+//! is allowed only with `discardLocalChanges: true` (see `sequence::reset`); force branch delete only with an explicit flag.
 use super::repo::canonical_key;
 use super::runner::{check_not_option, norm_hash, run, run_raw, run_stream};
 use crate::error::{AppError, ErrorCode, Result};

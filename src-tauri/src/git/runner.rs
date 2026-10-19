@@ -6,7 +6,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 
 pub struct Output {
     pub stdout: Vec<u8>,
@@ -37,39 +37,113 @@ impl Output {
     }
 }
 
-static GIT: OnceLock<Option<PathBuf>> = OnceLock::new();
+static GIT_AUTO: OnceLock<Option<PathBuf>> = OnceLock::new();
+static GIT_OVERRIDE: RwLock<Option<PathBuf>> = RwLock::new(None);
 
-/// A candidate counts only if `--version` really prints a git version (the macOS /usr/bin/git
-/// shim fails when the command line tools are missing).
-fn probe(p: &Path) -> bool {
-    Command::new(p)
+/// `git --version` of a candidate ("2.50.1"), or None when it is not a working git (the macOS
+/// /usr/bin/git shim fails when the command line tools are missing).
+pub fn probe_version(p: &Path) -> Option<String> {
+    let o = Command::new(p)
         .arg("--version")
         .stdin(Stdio::null())
         .stderr(Stdio::null())
         .output()
-        .map(|o| o.status.success() && o.stdout.starts_with(b"git version"))
-        .unwrap_or(false)
+        .ok()?;
+    if !o.status.success() || !o.stdout.starts_with(b"git version") {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&o.stdout);
+    Some(text.split_whitespace().nth(2).unwrap_or("unknown").to_string())
 }
 
-pub fn git_path() -> Result<&'static Path> {
-    let found = GIT.get_or_init(|| {
-        let mut candidates: Vec<PathBuf> = Vec::new();
-        if let Some(p) = std::env::var_os("GIT_LOG_VIEWER_GIT") {
-            candidates.push(PathBuf::from(p));
-        }
-        for p in ["/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git"] {
-            candidates.push(PathBuf::from(p));
-        }
-        if let Some(path) = std::env::var_os("PATH") {
-            for d in std::env::split_paths(&path) {
-                candidates.push(d.join("git"));
+/// What auto-detect picks: `GIT_LOG_VIEWER_GIT`, homebrew, /usr/local, /usr/bin, then PATH. Cached.
+pub fn auto_detect() -> Option<PathBuf> {
+    GIT_AUTO
+        .get_or_init(|| {
+            let mut candidates: Vec<PathBuf> = Vec::new();
+            if let Some(p) = std::env::var_os("GIT_LOG_VIEWER_GIT") {
+                candidates.push(PathBuf::from(p));
             }
+            for p in ["/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git"] {
+                candidates.push(PathBuf::from(p));
+            }
+            if let Some(path) = std::env::var_os("PATH") {
+                for d in std::env::split_paths(&path) {
+                    candidates.push(d.join("git"));
+                }
+            }
+            candidates.into_iter().find(|p| p.is_file() && probe_version(p).is_some())
+        })
+        .clone()
+}
+
+/// Settings override (`AppSettings.gitPath`). `None` returns to auto-detect.
+pub fn set_git_override(p: Option<PathBuf>) {
+    *GIT_OVERRIDE.write().unwrap_or_else(|e| e.into_inner()) = p;
+}
+
+pub fn git_override() -> Option<PathBuf> {
+    GIT_OVERRIDE.read().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+/// Lookup order: settings override, env `GIT_LOG_VIEWER_GIT`, the candidate list.
+pub fn git_path() -> Result<PathBuf> {
+    if let Some(p) = git_override() {
+        return if p.is_file() {
+            Ok(p)
+        } else {
+            Err(AppError::new(ErrorCode::GitNotFound, format!("configured git not found: {}", p.display())))
+        };
+    }
+    auto_detect().ok_or_else(|| AppError::new(ErrorCode::GitNotFound, "git executable not found"))
+}
+
+pub const FALLBACK_PATH: &str = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
+const LOGIN_PATH_BEGIN: &str = "__LANES_PATH_BEGIN__";
+const LOGIN_PATH_END: &str = "__LANES_PATH_END__";
+static LOGIN_PATH: OnceLock<String> = OnceLock::new();
+
+/// Extracts PATH from the marked output of the login shell; None when markers/value are missing.
+pub fn parse_login_path(out: &str) -> Option<String> {
+    let start = out.rfind(LOGIN_PATH_BEGIN)? + LOGIN_PATH_BEGIN.len();
+    let rest = &out[start..];
+    let end = rest.find(LOGIN_PATH_END)?;
+    let v = rest[..end].trim();
+    (!v.is_empty() && !v.contains('\n')).then(|| v.to_string())
+}
+
+/// Appends the fallback directories that are missing so git, brew tools and /bin utilities are always reachable.
+pub fn with_fallback_dirs(path: &str) -> String {
+    let mut parts: Vec<&str> = path.split(':').filter(|p| !p.is_empty()).collect();
+    for d in FALLBACK_PATH.split(':') {
+        if !parts.contains(&d) {
+            parts.push(d);
         }
-        candidates.into_iter().find(|p| p.is_file() && probe(p))
-    });
-    found
-        .as_deref()
-        .ok_or_else(|| AppError::new(ErrorCode::GitNotFound, "git executable not found"))
+    }
+    parts.join(":")
+}
+
+fn resolve_login_path() -> String {
+    let shell = std::env::var("SHELL")
+        .ok()
+        .filter(|s| Path::new(s).is_absolute() && Path::new(s).is_file())
+        .unwrap_or_else(|| "/bin/zsh".to_string());
+    // Fixed command, no user input. `-i` so PATH edits in .zshrc (nvm, volta, husky setups) count.
+    let mut c = Command::new(shell);
+    c.args(["-ilc", "printf '%s%s%s' __LANES_PATH_BEGIN__ \"$PATH\" __LANES_PATH_END__"]).stdin(Stdio::null());
+    let resolved = exec(c, Limits { timeout: Some(Duration::from_secs(2)), max_stdout: Some(1 << 20), stdin: None }, &mut |_| {})
+        .ok()
+        .filter(|(o, _)| o.ok())
+        .and_then(|(o, _)| parse_login_path(&o.text()));
+    match resolved {
+        Some(p) => with_fallback_dirs(&p),
+        None => FALLBACK_PATH.to_string(),
+    }
+}
+
+/// PATH given to hook-running write ops. Resolved once (2 s timeout); call early at startup.
+pub fn login_path() -> &'static str {
+    LOGIN_PATH.get_or_init(resolve_login_path)
 }
 
 const SCRUBBED_ENV: &[&str] = &[
@@ -141,6 +215,18 @@ pub fn run_stdin_raw<S: AsRef<OsStr>>(repo: &str, args: &[S], input: Vec<u8>, re
     Ok(to_output(out))
 }
 
+/// Command output with stdout and stderr joined, for classifying commands that report errors on stdout.
+impl Output {
+    pub fn combined(&self) -> String {
+        let mut s = self.text();
+        if !s.is_empty() && !s.ends_with('\n') && !self.stderr.is_empty() {
+            s.push('\n');
+        }
+        s.push_str(&self.stderr);
+        s
+    }
+}
+
 pub fn run_stdin<S: AsRef<OsStr>>(repo: &str, args: &[S], input: Vec<u8>, read_only: bool) -> Result<Output> {
     check(run_stdin_raw(repo, args, input, read_only)?)
 }
@@ -189,18 +275,29 @@ struct Limits {
     timeout: Option<Duration>,
     /// stop reading (and kill git) once stdout exceeds this many bytes
     max_stdout: Option<usize>,
+    /// bytes written to the child's stdin (then closed); None = /dev/null
+    stdin: Option<Vec<u8>>,
 }
 
 /// Core executor: streams stdout/stderr through threads, enforces a deadline and a stdout cap.
 /// Returns the output and whether stdout was cut at `max_stdout`. Never leaves the child running.
-fn exec(mut c: Command, limits: Limits, on_line: &mut dyn FnMut(&str)) -> Result<(Output, bool)> {
+fn exec(mut c: Command, mut limits: Limits, on_line: &mut dyn FnMut(&str)) -> Result<(Output, bool)> {
     c.stdout(Stdio::piped()).stderr(Stdio::piped());
+    if limits.stdin.is_some() {
+        c.stdin(Stdio::piped());
+    }
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
         c.process_group(0);
     }
     let mut child = c.spawn()?;
+    if let Some(input) = limits.stdin.take() {
+        let mut stdin = child.stdin.take().expect("piped stdin");
+        std::thread::spawn(move || {
+            let _ = stdin.write_all(&input);
+        });
+    }
     let (tx, rx) = mpsc::channel::<Chunk>();
     pump(child.stdout.take().expect("piped stdout"), tx.clone(), false);
     pump(child.stderr.take().expect("piped stderr"), tx, true);
@@ -263,6 +360,15 @@ fn exec(mut c: Command, limits: Limits, on_line: &mut dyn FnMut(&str)) -> Result
     ))
 }
 
+fn apply_network(c: &mut Command, repo: &str) {
+    if std::env::var_os("GIT_SSH_COMMAND").is_none()
+        && std::env::var_os("GIT_SSH").is_none()
+        && !run_raw(repo, &["config", "--get", "core.sshCommand"], true).map(|o| o.ok()).unwrap_or(false)
+    {
+        c.env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes");
+    }
+}
+
 /// Streaming variant: stderr is split on `\r`/`\n` and each non-empty line is passed to `on_line`.
 /// `timeout` kills git after the deadline and fails with `gitFailed`. `network` adds a
 /// non-interactive ssh default unless the user configured their own.
@@ -273,23 +379,56 @@ pub fn run_stream<S: AsRef<OsStr>>(
     network: bool,
     on_line: &mut dyn FnMut(&str),
 ) -> Result<Output> {
-    let mut c = command(repo, args, false)?;
-    if network
-        && std::env::var_os("GIT_SSH_COMMAND").is_none()
-        && std::env::var_os("GIT_SSH").is_none()
-        && !run_raw(repo, &["config", "--get", "core.sshCommand"], true).map(|o| o.ok()).unwrap_or(false)
-    {
-        c.env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes");
-    }
-    let (o, _) = exec(c, Limits { timeout: Some(timeout), max_stdout: None }, on_line)?;
+    let o = run_opts(repo, args, Opts { timeout, network, hooks: false, stdin: None }, on_line)?;
     check(o)
+}
+
+/// Options for [`run_opts`].
+pub struct Opts {
+    pub timeout: Duration,
+    /// non-interactive ssh default
+    pub network: bool,
+    /// runs hooks: PATH becomes the login-shell PATH
+    pub hooks: bool,
+    pub stdin: Option<Vec<u8>>,
+}
+
+/// General executor for write ops: optional stdin, timeout, streaming stderr lines, hook PATH.
+/// Returns the output whatever the exit code (callers classify with [`check_all`] or inspect it);
+/// a timeout is an error.
+pub fn run_opts<S: AsRef<OsStr>>(repo: &str, args: &[S], o: Opts, on_line: &mut dyn FnMut(&str)) -> Result<Output> {
+    let mut c = command(repo, args, false)?;
+    if o.network {
+        apply_network(&mut c, repo);
+    }
+    if o.hooks {
+        c.env("PATH", login_path());
+    }
+    let (out, _) = exec(c, Limits { timeout: Some(o.timeout), max_stdout: None, stdin: o.stdin }, on_line)?;
+    Ok(out)
+}
+
+/// Non-zero exit becomes an error classified from stdout + stderr.
+pub fn check_all(o: Output) -> Result<Output> {
+    if o.ok() {
+        Ok(o)
+    } else {
+        let mut e = classify_stderr(&o.combined(), o.code);
+        e.stderr = Some(o.combined());
+        Err(e)
+    }
 }
 
 /// Read-only run that stops reading stdout after `max` bytes (killing git). Returns (output, truncated).
 pub fn run_capped<S: AsRef<OsStr>>(repo: &str, args: &[S], max: usize) -> Result<(Output, bool)> {
+    run_capped_codes(repo, args, max, &[0])
+}
+
+/// Like [`run_capped`] but also accepts the listed exit codes (e.g. 1 for `diff --no-index`).
+pub fn run_capped_codes<S: AsRef<OsStr>>(repo: &str, args: &[S], max: usize, ok_codes: &[i32]) -> Result<(Output, bool)> {
     let c = command(repo, args, true)?;
-    let (o, truncated) = exec(c, Limits { timeout: Some(Duration::from_secs(60)), max_stdout: Some(max) }, &mut |_| {})?;
-    if truncated { Ok((o, true)) } else { check(o).map(|o| (o, false)) }
+    let (o, truncated) = exec(c, Limits { timeout: Some(Duration::from_secs(60)), max_stdout: Some(max), stdin: None }, &mut |_| {})?;
+    if truncated || ok_codes.contains(&o.code) { Ok((o, truncated)) } else { check(o).map(|o| (o, false)) }
 }
 
 /// Reject values that git could interpret as options.
@@ -299,6 +438,27 @@ pub fn check_not_option(kind: &str, v: &str) -> Result<()> {
     } else {
         Ok(())
     }
+}
+
+/// A repo-relative path argument: non-empty, no NUL, not absolute, no `..` component.
+pub fn check_rel_path(p: &str) -> Result<()> {
+    if p.is_empty() || p.contains('\0') {
+        return Err(AppError::invalid("empty or invalid path"));
+    }
+    let path = Path::new(p);
+    if path.is_absolute()
+        || path.components().any(|c| matches!(c, std::path::Component::ParentDir | std::path::Component::Prefix(_)))
+    {
+        return Err(AppError::invalid(format!("path must be inside the repository: {p:?}")));
+    }
+    Ok(())
+}
+
+pub fn check_rel_paths(paths: &[String]) -> Result<()> {
+    if paths.is_empty() {
+        return Err(AppError::invalid("no paths given"));
+    }
+    paths.iter().try_for_each(|p| check_rel_path(p))
 }
 
 /// Full object ids only (40 hex sha1 / 64 hex sha256); returns the lowercase form.

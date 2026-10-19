@@ -1,0 +1,16 @@
+{
+  "path": "/r",
+  "name": "r",
+  "open": true,
+  "branch": "main",
+  "headHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "upstream": null,
+  "ahead": null,
+  "behind": null,
+  "changedCount": 1,
+  "stagedCount": 0,
+  "conflictCount": 0,
+  "operation": null,
+  "lastFetch": null,
+  "error": null
+}

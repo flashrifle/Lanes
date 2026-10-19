@@ -1,0 +1,8 @@
+{
+  "remote": "origin",
+  "localBranch": "main",
+  "remoteBranch": "main",
+  "setUpstream": true,
+  "forceWithLease": null,
+  "followTags": false
+}

@@ -1,0 +1,9 @@
+{
+  "paths": [
+    "a"
+  ],
+  "untrackedPaths": [
+    "b"
+  ],
+  "includeStaged": false
+}

@@ -1,0 +1,10 @@
+{
+  "operation": "rebase",
+  "headName": "feature",
+  "ontoHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "stoppedAt": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "step": 2,
+  "total": 5,
+  "canContinue": false,
+  "canSkip": true
+}

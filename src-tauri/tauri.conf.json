@@ -44,6 +44,15 @@
       "signingIdentity": "Developer ID Application: jaemin lee (ZHQJ79W867)",
       "hardenedRuntime": true,
       "minimumSystemVersion": "11.0"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_UPDATER_PUBKEY",
+      "endpoints": [
+        "https://github.com/flashrifle/Lanes/releases/latest/download/latest.json"
+      ]
     }
   }
 }

@@ -19,7 +19,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -28,6 +28,11 @@ notify = "8"
 thiserror = "2"
 regex = "1"
 sys-locale = "0.3.2"
+url = "2"
+time = { version = "0.3", features = ["formatting"] }
+tauri-plugin-updater = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

@@ -1,5 +1,5 @@
 use crate::git::refs::{DEFAULT_FAVORITES, Favorites};
-use crate::models::RecentRepo;
+use crate::models::{AppSettings, RecentRepo};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -27,6 +27,9 @@ struct StoredFavs {
 struct StateFile {
     recents: Vec<StoredRecent>,
     favorites: BTreeMap<String, StoredFavs>,
+    settings: AppSettings,
+    /// the one-time "Lanes is still in the menu bar" notification was shown
+    hidden_notice_shown: bool,
 }
 
 pub struct Persist {
@@ -96,6 +99,27 @@ impl Persist {
             .collect()
     }
 
+    pub fn settings(&self) -> AppSettings {
+        self.lock().settings.clone()
+    }
+
+    pub fn set_settings(&self, s: AppSettings) {
+        let mut st = self.lock();
+        st.settings = s;
+        self.save(&st);
+    }
+
+    /// Returns true exactly once (and remembers it).
+    pub fn take_hidden_notice(&self) -> bool {
+        let mut st = self.lock();
+        if st.hidden_notice_shown {
+            return false;
+        }
+        st.hidden_notice_shown = true;
+        self.save(&st);
+        true
+    }
+
     pub fn favorites(&self, repo: &str) -> Favorites {
         let st = self.lock();
         match st.favorites.get(repo) {
@@ -141,5 +165,29 @@ mod tests {
         assert_eq!(p2.recents().len(), MAX_RECENTS);
         p2.set_favorite("/r", "refs/heads/main", true);
         assert!(p2.favorites("/r").is_favorite("refs/heads/main"));
+    }
+
+    #[test]
+    fn settings_roundtrip_and_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("state.json");
+        let p = Persist::new(Some(file.clone()));
+        assert_eq!(p.settings(), AppSettings::default());
+        let s = AppSettings {
+            language: crate::models::LanguageSetting::Ko,
+            git_path: Some("/usr/bin/git".into()),
+            background_fetch_minutes: Some(30),
+            ..Default::default()
+        };
+        p.set_settings(s.clone());
+        assert!(p.take_hidden_notice());
+        assert!(!p.take_hidden_notice());
+        let p2 = Persist::new(Some(file));
+        assert_eq!(p2.settings(), s);
+        assert!(!p2.take_hidden_notice());
+        // an old state.json without settings still loads, with defaults
+        let old = tempfile::tempdir().unwrap().keep().join("state.json");
+        std::fs::write(&old, r#"{"recents":[],"favorites":{}}"#).unwrap();
+        assert_eq!(Persist::new(Some(old)).settings(), AppSettings::default());
     }
 }

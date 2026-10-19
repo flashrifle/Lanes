@@ -1,0 +1,19 @@
+{
+  "localBranch": "main",
+  "remotes": [
+    "origin"
+  ],
+  "remote": "origin",
+  "remoteBranch": "main",
+  "upstream": null,
+  "remoteHash": null,
+  "outgoing": [
+    {
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "subject": "s",
+      "authorName": "n",
+      "authorTime": 1
+    }
+  ],
+  "behind": 0
+}

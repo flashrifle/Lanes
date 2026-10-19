@@ -1,8 +1,17 @@
 pub mod changes;
+pub mod commit;
 pub mod diff;
 pub mod file;
+pub mod linehist;
 pub mod log;
 pub mod ops;
+pub mod push;
+pub mod reflog;
 pub mod refs;
 pub mod repo;
 pub mod runner;
+pub mod sequence;
+pub mod stage;
+pub mod stash;
+pub mod status;
+pub mod tags;

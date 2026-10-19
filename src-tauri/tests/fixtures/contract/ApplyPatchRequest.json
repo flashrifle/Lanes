@@ -1,0 +1,6 @@
+{
+  "path": "a",
+  "patch": "diff --git a/a b/a\n",
+  "target": "index",
+  "reverse": true
+}

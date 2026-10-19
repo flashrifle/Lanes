@@ -215,7 +215,7 @@ pub fn filter_commits(snap: &Snapshot, f: &LogFilter) -> Result<FilterResult> {
         f.users.as_ref().filter(|u| !u.is_empty()).map(|u| u.iter().map(|s| s.to_lowercase()).collect());
     let date = f.date.as_ref().filter(|d| d.since.is_some() || d.until.is_some());
     let paths = f.paths.as_ref().filter(|p| !p.is_empty());
-    if text.is_none() && users.is_none() && date.is_none() && paths.is_none() {
+    if text.is_none() && users.is_none() && date.is_none() && paths.is_none() && f.rev_range.is_none() {
         return Ok(FilterResult { matches: None });
     }
     let re = match text {
@@ -236,9 +236,18 @@ pub fn filter_commits(snap: &Snapshot, f: &LogFilter) -> Result<FilterResult> {
         Some(p) => Some(path_matches(snap, p)?),
         None => None,
     };
+    let range_set = match &f.rev_range {
+        Some(rr) => Some(crate::git::reflog::rev_range_hashes(&snap.repo_path, rr)?),
+        None => None,
+    };
     let mut out = Vec::new();
     for (i, r) in snap.records.iter().enumerate() {
         let i = i as u32;
+        if let Some(rs) = &range_set
+            && !rs.contains(&r.hash)
+        {
+            continue;
+        }
         if let Some(ps) = &path_set
             && !ps.contains(&i) {
                 continue;

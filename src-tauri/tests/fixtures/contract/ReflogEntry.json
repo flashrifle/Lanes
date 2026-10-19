@@ -1,0 +1,7 @@
+{
+  "selector": "HEAD@{0}",
+  "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "action": "commit",
+  "message": "m",
+  "time": 1
+}

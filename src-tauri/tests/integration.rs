@@ -131,6 +131,7 @@ fn linear_history() {
         users: None,
         date: None,
         paths: None,
+        rev_range: None,
     };
     let m = snapshot::filter_commits(&snap, &f("BODY", false, false)).unwrap().matches;
     assert_eq!(m, Some(vec![1]));
@@ -141,20 +142,21 @@ fn linear_history() {
     assert_eq!(snapshot::filter_commits(&snap, &f("(", true, true)).unwrap_err().code, ErrorCode::InvalidArgument);
     let m = snapshot::filter_commits(&snap, &f(&h2[..8], false, false)).unwrap().matches;
     assert_eq!(m, Some(vec![1]));
-    let by_path = LogFilter { text: None, users: None, date: None, paths: Some(vec!["b.txt".into()]) };
+    let by_path = LogFilter { text: None, users: None, date: None, paths: Some(vec!["b.txt".into()]), rev_range: None };
     assert_eq!(snapshot::filter_commits(&snap, &by_path).unwrap().matches, Some(vec![0]));
-    let by_user = LogFilter { text: None, users: Some(vec!["TEST@example".into()]), date: None, paths: None };
+    let by_user = LogFilter { text: None, users: Some(vec!["TEST@example".into()]), date: None, paths: None, rev_range: None };
     assert_eq!(snapshot::filter_commits(&snap, &by_user).unwrap().matches.unwrap().len(), 3);
-    let by_user = LogFilter { text: None, users: Some(vec!["nobody".into()]), date: None, paths: None };
+    let by_user = LogFilter { text: None, users: Some(vec!["nobody".into()]), date: None, paths: None, rev_range: None };
     assert_eq!(snapshot::filter_commits(&snap, &by_user).unwrap().matches, Some(vec![]));
     let by_date = LogFilter {
         text: None,
         users: None,
         date: Some(DateRange { since: Some(s.timestamps[1]), until: Some(s.timestamps[1]) }),
         paths: None,
+        rev_range: None,
     };
     assert_eq!(snapshot::filter_commits(&snap, &by_date).unwrap().matches, Some(vec![1]));
-    let empty = LogFilter { text: None, users: None, date: None, paths: None };
+    let empty = LogFilter { text: None, users: None, date: None, paths: None, rev_range: None };
     assert_eq!(snapshot::filter_commits(&snap, &empty).unwrap().matches, None);
 
     // changes
@@ -626,7 +628,7 @@ fn literal_pathspecs() {
     let store = SnapshotStore::default();
     let snap = r.load(&store);
     let s = store.get(snap.snapshot_id).unwrap();
-    let f = LogFilter { text: None, users: None, date: None, paths: Some(vec!["f*.txt".into()]) };
+    let f = LogFilter { text: None, users: None, date: None, paths: Some(vec!["f*.txt".into()]), rev_range: None };
     let m = snapshot::filter_commits(&s, &f).unwrap().matches.unwrap();
     assert_eq!(m.len(), 1);
     assert_eq!(snap.hashes[m[0] as usize], both);
@@ -676,7 +678,7 @@ fn path_filter_on_unborn_repo() {
     )
     .unwrap();
     let s = store.get(snap.snapshot_id).unwrap();
-    let f = LogFilter { text: None, users: None, date: None, paths: Some(vec!["a.txt".into()]) };
+    let f = LogFilter { text: None, users: None, date: None, paths: Some(vec!["a.txt".into()]), rev_range: None };
     assert_eq!(snapshot::filter_commits(&s, &f).unwrap().matches, Some(vec![]));
 }
 

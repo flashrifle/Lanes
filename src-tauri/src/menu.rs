@@ -1,10 +1,24 @@
 //! Native app menu, localised from the system locale (Korean or English). Same layout as Tauri's default menu,
 //! but with the proper app name ("Lanes", not the crate name) and the app icon in the About panel.
 
+use crate::models::MenuAction;
 use tauri::menu::{
-    AboutMetadata, Menu, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID, WINDOW_SUBMENU_ID,
+    AboutMetadata, Menu, MenuItemBuilder, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID, WINDOW_SUBMENU_ID,
 };
 use tauri::{AppHandle, Runtime};
+
+pub const ID_SETTINGS: &str = "lanes.settings";
+pub const ID_UPDATES: &str = "lanes.checkForUpdates";
+pub const ID_REPORT: &str = "lanes.reportIssue";
+
+pub fn action_for_id(id: &str) -> Option<MenuAction> {
+    match id {
+        ID_SETTINGS => Some(MenuAction::Settings),
+        ID_UPDATES => Some(MenuAction::CheckForUpdates),
+        ID_REPORT => Some(MenuAction::ReportIssue),
+        _ => None,
+    }
+}
 
 const APP_NAME: &str = "Lanes";
 
@@ -44,6 +58,9 @@ struct Strings {
     minimize: &'static str,
     zoom: &'static str,
     help: &'static str,
+    settings: &'static str,
+    updates: &'static str,
+    report: &'static str,
     credits: &'static str,
 }
 
@@ -71,6 +88,9 @@ fn strings(lang: Lang) -> Strings {
             minimize: "최소화",
             zoom: "확대/축소",
             help: "도움말",
+            settings: "설정…",
+            updates: "업데이트 확인…",
+            report: "이슈 보고…",
             credits: "IntelliJ Platform 그래프 엔진 기반 · Apache-2.0",
         },
         Lang::En => Strings {
@@ -95,13 +115,16 @@ fn strings(lang: Lang) -> Strings {
             minimize: "Minimize",
             zoom: "Zoom",
             help: "Help",
+            settings: "Settings…",
+            updates: "Check for Updates…",
+            report: "Report Issue…",
             credits: "Graph engine derived from IntelliJ Platform · Apache-2.0",
         },
     }
 }
 
-pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
-    let s = strings(lang_from_locale(sys_locale::get_locale().as_deref()));
+pub fn build<R: Runtime>(app: &AppHandle<R>, lang: Lang) -> tauri::Result<Menu<R>> {
+    let s = strings(lang);
     let about = AboutMetadata {
         name: Some(APP_NAME.into()),
         version: Some(app.package_info().version.to_string()),
@@ -118,6 +141,9 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         &[
             &PredefinedMenuItem::about(app, Some(&s.about), Some(about))?,
+            &PredefinedMenuItem::separator(app)?,
+            &MenuItemBuilder::with_id(ID_SETTINGS, s.settings).accelerator("CmdOrCtrl+,").build(app)?,
+            &MenuItemBuilder::with_id(ID_UPDATES, s.updates).build(app)?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::services(app, Some(s.services))?,
             &PredefinedMenuItem::separator(app)?,
@@ -166,7 +192,11 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::close_window(app, Some(s.close_window))?,
         ],
     )?;
-    let help_menu = Submenu::with_id_and_items(app, HELP_SUBMENU_ID, s.help, true, &[])?;
+    let help_menu = Submenu::with_id_and_items(app, HELP_SUBMENU_ID,
+        s.help,
+        true,
+        &[&MenuItemBuilder::with_id(ID_REPORT, s.report).build(app)?],
+    )?;
 
     Menu::with_items(
         app,
@@ -186,5 +216,9 @@ mod tests {
         assert_eq!(lang_from_locale(Some("en-US")), Lang::En);
         assert_eq!(lang_from_locale(Some("ja-JP")), Lang::En);
         assert_eq!(lang_from_locale(None), Lang::En);
+        assert_eq!(action_for_id(ID_SETTINGS), Some(MenuAction::Settings));
+        assert_eq!(action_for_id(ID_UPDATES), Some(MenuAction::CheckForUpdates));
+        assert_eq!(action_for_id(ID_REPORT), Some(MenuAction::ReportIssue));
+        assert_eq!(action_for_id("other"), None);
     }
 }

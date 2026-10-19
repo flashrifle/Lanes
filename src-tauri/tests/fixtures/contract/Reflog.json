@@ -1,0 +1,13 @@
+{
+  "ref": "HEAD",
+  "entries": [
+    {
+      "selector": "HEAD@{0}",
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "action": "commit",
+      "message": "m",
+      "time": 1
+    }
+  ],
+  "truncated": false
+}

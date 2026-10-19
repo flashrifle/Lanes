@@ -1,0 +1,9 @@
+{
+  "path": "src/a.ts",
+  "oldPath": "src/old.ts",
+  "staged": "renamed",
+  "unstaged": "modified",
+  "untracked": false,
+  "conflict": null,
+  "submodule": false
+}
