@@ -42,9 +42,9 @@ function RepoBar() {
         </span>
       )}
       {op && <span className="repo-op">{t(OP_KEY[op])}</span>}
+      <RepoActions />
       <OperationBanner />
       <span className="grow" />
-      <RepoActions />
       {snapshot && <span className="muted">{t('repo.commitCount', { n: snapshot.commitCount })} · {snapshot.loadMillis}ms</span>}
     </div>
   );

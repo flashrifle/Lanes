@@ -34,6 +34,7 @@ export const koBase = {
   'actions.push': '푸시',
   'actions.commit': '커밋',
   'actions.stash': 'Stash',
+  'actions.reflog': 'Reflog',
   'actions.pullTip': (p: Params) => `받을 커밋 ${n(p.n)}개 — 현재 브랜치 풀`,
   'actions.pushTip': (p: Params) => `보낼 커밋 ${n(p.n)}개 — 푸시…`,
   'actions.pushNoUpstream': '업스트림이 없습니다 — 푸시하면서 설정',

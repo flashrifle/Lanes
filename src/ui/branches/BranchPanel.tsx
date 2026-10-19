@@ -15,7 +15,7 @@ const sectionTip = (g: string): string | undefined => (g === 'local' ? t('branch
 
 export function BranchPanel() {
   const store = useRepoStore();
-  const { checkoutRef, deleteBranch, fetchAll, jumpToCommitIndex, openDialog, pull, setScopeRefs, toggleFavorite } = store;
+  const { checkoutRef, deleteBranch, jumpToCommitIndex, openDialog, setScopeRefs, toggleFavorite } = store;
   const snapshot = useRepo((s) => s.snapshot);
   const scopeRefs = useRepo((s) => s.scopeRefs);
   const [query, setQuery] = useState('');
@@ -85,30 +85,12 @@ export function BranchPanel() {
     : selectedRef.isFavorite ? t('branches.favRemove', { name: selectedRef.name }) : t('branches.favAdd', { name: selectedRef.name });
   const newBranchFrom = selectedRef && selectedRef.type !== 'head' ? selectedRef.name : 'HEAD';
 
-  const pushBranch = selectedRef?.type === 'localBranch' ? selectedRef.name : null;
-  const pushLabel = pushBranch ? t('push.toolTip', { name: pushBranch }) : t('push.toolTipCurrent');
 
   const tools = (
     <div className="branch-tools" role="toolbar" aria-orientation="vertical" aria-label={t('branches.toolsAria')}>
       <Tooltip side="right" label={t('branches.newBranchFrom', { name: newBranchFrom })}>
         <button className="icon-btn" onClick={() => openDialog({ kind: 'createBranch', startPoint: newBranchFrom, startLabel: newBranchFrom })}>
           <Icon name="plus" size={15} />
-        </button>
-      </Tooltip>
-      <Tooltip side="right" label={t('branches.fetchAll')}>
-        <button className="icon-btn" onClick={() => void fetchAll()}><Icon name="download" size={15} /></button>
-      </Tooltip>
-      <Tooltip side="right" label={t('branches.pull')}>
-        <button className="icon-btn" onClick={() => void pull('ffOnly')}><Icon name="pull" size={15} /></button>
-      </Tooltip>
-      <Tooltip side="right" label={pushLabel}>
-        <button className="icon-btn" onClick={() => store.ops.open({ kind: 'push', localBranch: pushBranch })}>
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 10V3M4.8 5.8L8 2.6l3.2 3.2M3 13h10" /></svg>
-        </button>
-      </Tooltip>
-      <Tooltip side="right" label={t('reflog.menu')}>
-        <button className="icon-btn" onClick={() => store.ops.open({ kind: 'reflog', ref: null })}>
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.6h2.6M8 5v3.2l2.2 1.4" /></svg>
         </button>
       </Tooltip>
       <Tooltip side="right" label={favLabel}>

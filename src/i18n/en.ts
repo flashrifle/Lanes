@@ -32,6 +32,7 @@ const base: Record<keyof typeof koBase, Entry> = {
   'actions.push': 'Push',
   'actions.commit': 'Commit',
   'actions.stash': 'Stash',
+  'actions.reflog': 'Reflog',
   'actions.pullTip': (p: Params) => `${pl(p.n, 'commit')} to pull — Pull current branch`,
   'actions.pushTip': (p: Params) => `${pl(p.n, 'commit')} to push — Push…`,
   'actions.pushNoUpstream': 'No upstream — Push and set it',

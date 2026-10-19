@@ -13,6 +13,9 @@ const PushIcon = () => (
 const CommitIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><circle cx="8" cy="8" r="2.6" /><path d="M1.5 8h3.9M10.6 8h3.9" /></svg>
 );
+const ReflogIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.6h2.6M8 5v3.2l2.2 1.4" /></svg>
+);
 const StashIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 6.5h11v6.5h-11zM3.5 3.5h9l1 3h-11z" /><path d="M6.5 9.2h3" strokeLinecap="round" /></svg>
 );
@@ -53,6 +56,11 @@ export function RepoActions() {
       <Tooltip side="bottom" label={t('actions.stashTip')}>
         <button className="ra-btn" disabled={changed === 0} onClick={() => store.commit.openStashSave()}>
           <StashIcon /><span>{t('actions.stash')}</span>
+        </button>
+      </Tooltip>
+      <Tooltip side="bottom" label={t('reflog.menu')}>
+        <button className="ra-btn" onClick={() => store.ops.open({ kind: 'reflog', ref: null })}>
+          <ReflogIcon /><span>{t('actions.reflog')}</span>
         </button>
       </Tooltip>
     </div>
