@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lanes — a fast, lightweight Git client for macOS</title>
+<meta name="description" content="Lanes is a standalone Git client for macOS with a transit-map commit graph, branch compare, file history and blame, and staging, commit, push, merge and rebase. Free, open source (Apache-2.0), no telemetry.">
+<link rel="canonical" href="https://flashrifle.github.io/Lanes/en/">
+<link rel="alternate" hreflang="ko" href="https://flashrifle.github.io/Lanes/">
+<link rel="alternate" hreflang="en" href="https://flashrifle.github.io/Lanes/en/">
+<link rel="alternate" hreflang="x-default" href="https://flashrifle.github.io/Lanes/en/">
+<meta name="theme-color" content="#14161D">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lanes">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="ko_KR">
+<meta property="og:url" content="https://flashrifle.github.io/Lanes/en/">
+<meta property="og:title" content="Lanes — a fast, lightweight Git client for macOS">
+<meta property="og:description" content="A transit-map commit graph, file history and blame, and commit, push, merge and rebase. Free, open source, no telemetry.">
+<meta property="og:image" content="https://flashrifle.github.io/Lanes/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Lanes app icon and its commit graph">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Lanes — a fast, lightweight Git client for macOS">
+<meta name="twitter:description" content="A transit-map commit graph, file history and blame, and commit, push, merge and rebase. Free, open source, no telemetry.">
+<meta name="twitter:image" content="https://flashrifle.github.io/Lanes/assets/og.png">
+<link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="preload" href="../assets/fonts/archivo-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../assets/fonts/fonts.css">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="Lanes home"><img src="../assets/icon.svg" alt="" width="30" height="30"><span>Lanes</span></a>
+    <nav class="nav" aria-label="Main">
+      <a class="sec" href="#features">Features</a>
+      <a class="sec" href="#privacy">Privacy</a>
+      <a class="sec" href="#support">Support</a>
+      <a class="sec" href="#faq">FAQ</a>
+      <a class="lang" href="../" hreflang="ko" lang="ko">한국어</a>
+      <a class="gh" href="https://github.com/flashrifle/Lanes" aria-label="GitHub repository">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        <span class="sec">GitHub</span>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="hero-title">
+    <svg class="hero-lanes" viewBox="0 0 1440 820" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+      <path stroke="#2F78FF" d="M140 900 V-40"/>
+      <path stroke="#B04CF0" d="M140 760 L300 600 V260 L140 100"/>
+      <path stroke="#2FD47A" d="M300 470 L420 350 V-40"/>
+      <path stroke="#FF9A2E" d="M1300 900 V520 L1180 400 V-40"/>
+      <path stroke="#FF4F9A" d="M1300 640 L1400 540 V180 L1300 80 V-40"/>
+      <path stroke="#1FD1E0" d="M1180 260 L1060 140 V-40"/>
+    </svg>
+    <div class="wrap hero-inner">
+      <img class="hero-icon" src="../assets/icon.svg" alt="" width="112" height="112">
+      <h1 id="hero-title">Lanes</h1>
+      <p class="tagline">Your IDE's Git log, lifted out into its own app: <strong>a fast, lightweight Git client for macOS</strong>. From the commit graph to commit, push and rebase, without opening an IDE.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/flashrifle/Lanes/releases/latest">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
+          Download for macOS
+        </a>
+        <a class="btn" href="https://github.com/flashrifle/Lanes">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <p class="meta">v0.1.0 · Apple Silicon &amp; Intel · macOS 11+</p>
+      <div class="brew">
+        <code id="brew-cmd"><span class="p">$ </span>brew install --cask flashrifle/tap/lanes</code>
+        <button class="copy" type="button" data-copy="brew install --cask flashrifle/tap/lanes" data-done="Copied" aria-label="Copy the Homebrew install command">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+          <span>Copy</span>
+        </button>
+      </div>
+    </div>
+    <div class="shot-hero">
+      <figure class="frame">
+        <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Lanes</span></div>
+        <img src="../assets/screens/en/main.png" width="2880" height="1800" fetchpriority="high"
+             alt="The Lanes main window: branch sidebar on the left, a commit graph drawn as coloured transit lines with the uncommitted-changes row on top, and the selected commit's files and details on the right">
+      </figure>
+    </div>
+  </section>
+
+  <div class="route" id="features">
+    <div class="wrap">
+      <section class="stop" style="--line: var(--l-blue)" aria-labelledby="f-history">
+        <div class="stop-head">
+          <p class="kicker">Line 1 · History</p>
+          <h2 id="f-history">A commit graph you can read at a glance</h2>
+          <p class="lead">Lane layout and "Standard" (Bek) sorting, drawn like a transit map: straight lines and angled bends, one colour per branch from start to finish, and merge commits shaped like interchange stations. Scrolls smoothly past 100,000 commits.</p>
+        </div>
+        <ul class="feats">
+          <li><b>Line highlight</b> — click a line or a branch badge to bring that branch forward and dim the rest</li>
+          <li><b>Filters</b> — text or hash (regex, match case), branch, user, date and path; filtered history stays connected with dotted lines</li>
+          <li><b>Branch compare</b> — commits only on one side, both counts and the merge base</li>
+          <li><b>File history and blame</b> — follows renames; click a blame line to jump to its commit</li>
+          <li><b>History for selected lines</b> — only the commits that touched those lines (<code>git log -L</code>)</li>
+          <li><b>Reflog</b> — find lost commits, check them out or branch from them</li>
+          <li><b>Side-by-side diff window</b> — word-level highlight, F7 to the next change</li>
+        </ul>
+        <div class="shots two">
+          <figure class="wide">
+            <div class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Lanes</span></div>
+              <a class="zoom" href="../assets/screens/en/highlight.png"><img src="../assets/screens/en/highlight.png" width="2880" height="1800" loading="lazy" decoding="async"
+                   alt="The graph with one branch line highlighted: the chosen line stays bright while other lines and commits are dimmed"></a>
+            </div>
+            <figcaption>Click a line to follow just that branch. Esc clears it.</figcaption>
+          </figure>
+          <figure>
+            <div class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>History: GraphCell.tsx</span></div>
+              <a class="zoom" href="../assets/screens/en/history.png"><img src="../assets/screens/en/history.png" width="2800" height="1720" loading="lazy" decoding="async"
+                   alt="The file history window in blame mode: the commits that changed the file on the left, and the commit behind every line on the right"></a>
+            </div>
+            <figcaption>File history and blame (⌘⇧H)</figcaption>
+          </figure>
+          <figure>
+            <div class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Diff: commitStore.ts</span></div>
+              <a class="zoom" href="../assets/screens/en/diff.png"><img src="../assets/screens/en/diff.png" width="2600" height="1640" loading="lazy" decoding="async"
+                   alt="The side-by-side diff window: changed words are highlighted and unchanged regions are collapsed"></a>
+            </div>
+            <figcaption>Side-by-side diff with word-level highlight</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="stop" style="--line: var(--l-purple)" aria-labelledby="f-write">
+        <div class="stop-head">
+          <p class="kicker">Line 2 · Write operations</p>
+          <h2 id="f-write">From commit to rebase, all inside Lanes</h2>
+          <p class="lead">See your uncommitted changes in the top row of the log, stage by file, hunk or line, and commit. Risky operations always ask first.</p>
+        </div>
+        <ul class="feats">
+          <li><b>Uncommitted changes</b> — Conflicts, Staged, Unstaged and Untracked at a glance</li>
+          <li><b>Staging</b> — per file, or per hunk and line in the diff window: stage, unstage, discard</li>
+          <li><b>Commit</b> — amend, sign-off, commit and push in one go, and Undo Commit</li>
+          <li><b>Push</b> — preview outgoing commits, set upstream, push tags; force push only as a confirmed <code>--force-with-lease</code></li>
+          <li><b>Stash</b> — include untracked, keep index, selected files only; apply, pop, drop</li>
+          <li><b>Merge and rebase</b> — progress (step N of M), Continue / Skip / Abort, Accept Ours or Theirs for conflicts</li>
+          <li><b>Cherry-pick, revert, reset, tags</b> — from the commit context menu; a hard reset needs the branch name typed in</li>
+          <li><b>Action bar</b> — Fetch, Pull ↓n, Push ↑n, Commit, Stash and Reflog above the log</li>
+        </ul>
+        <div class="shots">
+          <figure>
+            <div class="frame"><div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Lanes</span></div>
+              <a class="zoom" href="../assets/screens/en/changes.png"><img src="../assets/screens/en/changes.png" width="2880" height="1800" loading="lazy" decoding="async"
+                   alt="The local changes panel: files grouped into staged, changes and unversioned, a typed commit message, and the Commit and Push and Commit buttons"></a>
+            </div>
+            <figcaption>Select the "Uncommitted changes" row and the right column becomes the commit panel.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="stop" style="--line: var(--l-green)" aria-labelledby="f-tray">
+        <div class="stop-head">
+          <p class="kicker">Line 3 · Menu bar</p>
+          <h2 id="f-tray">Without opening a window</h2>
+          <p class="lead">The menu bar icon shows how many commits are waiting to go out (↑) and come in (↓). Each repository lists its branch, change count and last fetch, with Pull, Push and Fetch one click away.</p>
+        </div>
+        <div class="shots side">
+          <ul class="feats" style="grid-template-columns: 1fr; margin-top: 0">
+            <li><b>Quick commit</b> — pick files in a small popover under the menu bar and commit, or commit and push</li>
+            <li><b>Stays around</b> — keeps running in the menu bar after the main window closes (optional)</li>
+            <li><b>Background fetch</b> — every 15, 30 or 60 minutes; off by default</li>
+            <li><b>Repository menus</b> — per-repo status and "Open in Lanes"</li>
+          </ul>
+          <figure class="narrow">
+            <div class="frame">
+              <a class="zoom" href="../assets/screens/en/quick.png"><img src="../assets/screens/en/quick.png" width="760" height="1040" loading="lazy" decoding="async"
+                   alt="The menu bar quick commit popover: README.md checked out of four changed files, with a commit message typed"></a>
+            </div>
+            <figcaption>Quick commit popover</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="stop" style="--line: var(--l-orange)" aria-labelledby="f-more">
+        <div class="stop-head">
+          <p class="kicker">Line 4 · Everything else</p>
+          <h2 id="f-more">Made for every day</h2>
+        </div>
+        <ul class="feats">
+          <li><b>Tabs</b> — several repositories as tabs; tabs and settings are remembered, and views refresh when a repo changes</li>
+          <li><b>English and Korean</b> — follows the system language, or pick one in Settings</li>
+          <li><b>Settings</b> — row density, date format, git path, external editor, update checks</li>
+          <li><b>Updates</b> — new versions are announced and installed in the app (can be turned off)</li>
+          <li><b>Issue reports</b> — a GitHub issue form prefilled with app, OS and git versions and the last error</li>
+          <li><b>Shortcuts</b> — ⌘T open a repo, ⌘1–9 switch tabs, ⌘R refresh, ⌘↩ commit</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  <svg class="divider" viewBox="0 0 1440 48" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+    <path stroke="#2F78FF" d="M0 24 H560 L584 8 H1440"/>
+    <path stroke="#B04CF0" d="M0 40 H620 L644 24 H1440" opacity=".7"/>
+  </svg>
+
+  <section class="section" id="privacy" aria-labelledby="privacy-title">
+    <div class="wrap">
+      <h2 id="privacy-title">No telemetry</h2>
+      <p class="lead">Lanes collects no usage data, and your repositories never leave your Mac.</p>
+      <div class="cards">
+        <div class="card" style="--line: var(--l-green)">
+          <h3>Nothing collected</h3>
+          <p>No telemetry, analytics, usage statistics or automatic crash uploads.</p>
+        </div>
+        <div class="card" style="--line: var(--l-blue)">
+          <h3>One network request</h3>
+          <p>The only automatic request is the update check against GitHub, and you can turn it off.</p>
+        </div>
+        <div class="card" style="--line: var(--l-purple)">
+          <h3>git runs when you say so</h3>
+          <p>Fetch, pull and push happen only when you run them, or when you turn on background fetch.</p>
+        </div>
+        <div class="card" style="--line: var(--l-orange)">
+          <h3>You send issue reports</h3>
+          <p>Lanes only opens a prefilled form in your browser; you review it and submit it yourself. Your user name in paths is masked as <code>~</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section support" id="support" aria-labelledby="support-title">
+    <div class="wrap">
+      <h2 id="support-title">Support Lanes</h2>
+      <p class="lead">Sponsorship keeps Lanes free and funds new features.</p>
+      <div class="cta">
+        <a class="btn sponsor" href="https://github.com/sponsors/flashrifle">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 008 13.393a20.561 20.561 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.75.75 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z"/></svg>
+          Sponsor on GitHub
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="faq" aria-labelledby="faq-title">
+    <div class="wrap faq">
+      <h2 id="faq-title">FAQ</h2>
+      <details>
+        <summary>Is it really free?</summary>
+        <div class="a"><p>Yes. Lanes is open source under the Apache License 2.0, with no paid tier and no account. The source is on <a href="https://github.com/flashrifle/Lanes">GitHub</a>.</p></div>
+      </details>
+      <details>
+        <summary>Is it notarized by Apple?</summary>
+        <div class="a"><p>Yes. The dmg is signed with a Developer ID and notarized by Apple, so it opens without Gatekeeper warnings. It is a universal app for Apple Silicon and Intel.</p></div>
+      </details>
+      <details>
+        <summary>Which git does it use?</summary>
+        <div class="a"><p>The <code>git</code> already on your Mac (2.23 or later): the Xcode Command Line Tools or Homebrew git both work, and you can set the path in Settings. Your git config, credentials and hooks apply as usual.</p></div>
+      </details>
+      <details>
+        <summary>Where does my data go?</summary>
+        <div class="a"><p>Nowhere. There is no telemetry; the only automatic network request is the update check against GitHub, which you can turn off. See <a href="#privacy">Privacy</a>.</p></div>
+      </details>
+      <details>
+        <summary>Does it run on Windows or Linux?</summary>
+        <div class="a"><p>Not yet. Lanes currently supports macOS 11 and later. It is built on Tauri, so other platforms are possible; open a GitHub issue if you need one.</p></div>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="row">
+      <a class="brand" href="./"><img src="../assets/icon.svg" alt="" width="24" height="24"><span>Lanes</span></a>
+      <p>© 2026 J-Lab · <a href="https://github.com/flashrifle/Lanes/blob/main/LICENSE">Apache-2.0</a></p>
+      <a href="https://github.com/flashrifle/Lanes">GitHub</a>
+      <a href="https://github.com/flashrifle/Lanes/releases">Releases</a>
+      <a href="https://github.com/flashrifle/Lanes/issues">Issues</a>
+      <a href="../" hreflang="ko" lang="ko">한국어</a>
+    </div>
+    <div class="row">
+      <p>Graph engine derived from IntelliJ Platform (Apache-2.0). Bundled fonts are under the SIL Open Font License 1.1 (<a href="../assets/fonts/LICENSES.txt">licenses</a>).</p>
+    </div>
+    <p class="tm">JetBrains, IntelliJ, WebStorm are trademarks of JetBrains s.r.o.; Lanes is not affiliated with JetBrains.</p>
+  </div>
+</footer>
+
+<script>
+  // copy-to-clipboard for the Homebrew command
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    var label = b.querySelector('span'), orig = label.textContent, t;
+    b.addEventListener('click', function () {
+      var text = b.getAttribute('data-copy');
+      var done = function () {
+        b.classList.add('done'); label.textContent = b.getAttribute('data-done');
+        clearTimeout(t); t = setTimeout(function () { b.classList.remove('done'); label.textContent = orig; }, 1800);
+      };
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+      function fallback() {
+        var ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ }
+        document.body.removeChild(ta);
+      }
+    });
+  });
+</script>
+</body>
+</html>

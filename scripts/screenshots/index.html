@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Lanes</title>
+<!-- Screenshot harness: shot config + localStorage seed, then the fake Tauri runtime, then the real app from Vite. -->
+<script src="/shots.js"></script>
+<script src="/mock.js"></script>
+<script type="module">
+import RefreshRuntime from "http://localhost:1420/@react-refresh";
+RefreshRuntime.injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;
+window.__vite_plugin_react_preamble_installed__ = true;
+</script>
+<script type="module" src="http://localhost:1420/@vite/client"></script>
+<style>
+  /* no blinking caret / scrollbars in screenshots */
+  * { caret-color: transparent !important; }
+  ::-webkit-scrollbar { width: 0; height: 0; }
+  html.narrow, html.narrow body { width: var(--shot-w); overflow: hidden; }
+</style>
+<script>
+  if (location.search.includes('quickCommit')) { document.documentElement.classList.add('narrow'); document.documentElement.style.setProperty('--shot-w', '380px'); }
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="http://localhost:1420/src/main.tsx"></script>
+<script type="module" src="/driver.js"></script>
+</body>
+</html>
