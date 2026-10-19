@@ -9,14 +9,23 @@ use std::sync::{Arc, Mutex, TryLockError};
 use std::time::Duration;
 
 pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(300);
-pub const LOCAL_TIMEOUT: Duration = Duration::from_secs(60);
+/// Local write ops (checkout, reset, stash, merge, rebase...): generous so a legitimate op is never killed.
+pub const LOCAL_TIMEOUT: Duration = Duration::from_secs(600);
+/// Ops that can run user hooks (commit, merge, rebase --continue, pull, push).
+pub const HOOK_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
-/// Per-repo mutex map (keyed by canonical path): a second write op on the same repo fails with
+type LockMap = Mutex<HashMap<String, Arc<Mutex<()>>>>;
+
+/// Per-repo mutex maps (keyed by canonical path): a second write op on the same repo fails with
 /// `busy`. The lock is an RAII guard, so it is released on success, error, timeout and panic.
+/// Fetch (which never touches the index) takes the separate `net` lock, so background fetches
+/// do not make user commits/stages `busy`.
 pub struct RepoLocks {
-    map: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    map: LockMap,
+    net: LockMap,
     pub network_timeout: Duration,
     pub local_timeout: Duration,
+    pub hook_timeout: Duration,
 }
 
 impl Default for RepoLocks {
@@ -25,25 +34,37 @@ impl Default for RepoLocks {
     }
 }
 
+fn run_locked<T>(map: &LockMap, repo: &str, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    let key = canonical_key(repo);
+    let m = {
+        let mut map = map.lock().unwrap_or_else(|p| p.into_inner());
+        map.entry(key).or_default().clone()
+    };
+    let _guard = match m.try_lock() {
+        Ok(g) => g,
+        Err(TryLockError::WouldBlock) => {
+            return Err(AppError::new(ErrorCode::Busy, "another git operation is running on this repository"));
+        }
+        Err(TryLockError::Poisoned(p)) => p.into_inner(),
+    };
+    f()
+}
+
 impl RepoLocks {
+    /// `hook_timeout` follows `local_timeout` here; use the field to override.
     pub fn with_timeouts(network_timeout: Duration, local_timeout: Duration) -> Self {
-        RepoLocks { map: Mutex::default(), network_timeout, local_timeout }
+        let hook_timeout = if local_timeout == LOCAL_TIMEOUT { HOOK_TIMEOUT } else { local_timeout };
+        RepoLocks { map: Mutex::default(), net: Mutex::default(), network_timeout, local_timeout, hook_timeout }
     }
 
+    /// Exclusive write lock (index / worktree / refs).
     pub fn run<T>(&self, repo: &str, f: impl FnOnce() -> Result<T>) -> Result<T> {
-        let key = canonical_key(repo);
-        let m = {
-            let mut map = self.map.lock().unwrap_or_else(|p| p.into_inner());
-            map.entry(key).or_default().clone()
-        };
-        let _guard = match m.try_lock() {
-            Ok(g) => g,
-            Err(TryLockError::WouldBlock) => {
-                return Err(AppError::new(ErrorCode::Busy, "another git operation is running on this repository"));
-            }
-            Err(TryLockError::Poisoned(p)) => p.into_inner(),
-        };
-        f()
+        run_locked(&self.map, repo, f)
+    }
+
+    /// Network lock: serializes fetches per repo without blocking local write ops.
+    pub fn run_network<T>(&self, repo: &str, f: impl FnOnce() -> Result<T>) -> Result<T> {
+        run_locked(&self.net, repo, f)
     }
 }
 
@@ -133,7 +154,7 @@ pub fn checkout(
 }
 
 pub fn fetch(locks: &RepoLocks, repo: &str, remote: Option<&str>, on_line: &mut dyn FnMut(&str)) -> Result<OpResult> {
-    locks.run(repo, || {
+    locks.run_network(repo, || {
         let mut args: Vec<String> = vec!["fetch".into(), "--prune".into(), "--progress".into()];
         match remote {
             Some(r) => {
@@ -156,7 +177,7 @@ pub fn pull(locks: &RepoLocks, repo: &str, mode: PullMode, on_line: &mut dyn FnM
         };
         let mut args = vec!["pull", "--progress"];
         args.extend_from_slice(flags);
-        let o = run_stream(repo, &args, locks.network_timeout, true, on_line)?;
+        let o = run_stream(repo, &args, locks.hook_timeout, true, on_line)?;
         Ok(OpResult { message: o.summary() })
     })
 }

@@ -21,6 +21,8 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 pub const TRAY_ID: &str = "lanes-tray";
 pub const REFRESH_DEBOUNCE: Duration = Duration::from_secs(1);
+/// A refresh happens at the latest this long after the first poke, however often it is poked.
+pub const REFRESH_MAX_WAIT: Duration = Duration::from_secs(5);
 
 /// Managed state of the menu-bar feature.
 pub struct Tray {
@@ -57,13 +59,13 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, items: &[Item]) -> tauri::Result<M
     let mut mb = MenuBuilder::new(app);
     for item in items {
         match item {
-            Item::Repo { index, title, info, actions } => {
+            Item::Repo { key, title, info, actions } => {
                 let mut sb = SubmenuBuilder::new(app, title);
                 if let Some(info) = info {
                     sb = sb.item(&MenuItemBuilder::new(info).enabled(false).build(app)?).separator();
                 }
                 for (a, label) in actions {
-                    sb = sb.text(model::repo_item_id(*index, *a), label);
+                    sb = sb.text(model::repo_item_id(key, *a), label);
                 }
                 mb = mb.item(&sb.build()?);
             }
@@ -140,14 +142,18 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) {
     let a = app.clone();
     std::thread::spawn(move || {
         while rx.recv().is_ok() {
-            loop {
-                match rx.recv_timeout(REFRESH_DEBOUNCE) {
+            let first = Instant::now();
+            while let Some(wait) = crate::watcher::debounce_timeout(first, Instant::now(), REFRESH_DEBOUNCE, REFRESH_MAX_WAIT) {
+                match rx.recv_timeout(wait) {
                     Ok(()) => continue,
                     Err(RecvTimeoutError::Timeout) => break,
                     Err(RecvTimeoutError::Disconnected) => return,
                 }
             }
-            refresh(&a);
+            // one panic (a bad repo, a poisoned lock) must not end the refresher for the rest of the session
+            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| refresh(&a))).is_err() {
+                eprintln!("lanes: tray refresh panicked; continuing");
+            }
         }
     });
     // background fetch
@@ -189,10 +195,11 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
         }
         return;
     }
-    if let Some((index, action)) = model::parse_repo_item_id(id) {
-        let path = app
-            .try_state::<Tray>()
-            .and_then(|t| t.repos.lock().unwrap_or_else(|p| p.into_inner()).get(index).map(|s| s.path.clone()));
+    if let Some((key, action)) = model::parse_repo_item_id(id) {
+        let path = app.try_state::<Tray>().and_then(|t| {
+            let repos = t.repos.lock().unwrap_or_else(|p| p.into_inner());
+            model::resolve_repo(&repos, &key).map(|s| s.path.clone())
+        });
         if let Some(path) = path {
             let app = app.clone();
             std::thread::spawn(move || run_repo_action(&app, &path, action));

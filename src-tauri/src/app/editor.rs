@@ -23,14 +23,32 @@ fn spawn(mut c: Command) -> Result<()> {
     Ok(())
 }
 
+/// True when the repo-relative path points into a `.git` directory (never opened as a document).
+pub fn is_inside_git_dir(path: &str) -> bool {
+    std::path::Path::new(path).components().any(|c| c.as_os_str() == ".git")
+}
+
+/// Opens with the configured app, else the default text editor (`open -t`), so a file is never
+/// handed to its default handler (an executable script would otherwise be run).
 pub fn open_in_editor(repo: &str, path: &str, editor: Option<&str>) -> Result<()> {
+    if is_inside_git_dir(path) {
+        return Err(AppError::invalid("files inside .git cannot be opened"));
+    }
     let full = resolve_inside(repo, path)?;
+    if full.strip_prefix(std::fs::canonicalize(repo)?).is_ok_and(|rel| is_inside_git_dir(&rel.to_string_lossy())) {
+        return Err(AppError::invalid("files inside .git cannot be opened"));
+    }
     let mut c = Command::new("open");
-    if let Some(app) = editor.map(str::trim).filter(|e| !e.is_empty()) {
-        if app.starts_with('-') {
-            return Err(AppError::invalid("invalid external editor"));
+    match editor.map(str::trim).filter(|e| !e.is_empty()) {
+        Some(app) => {
+            if app.starts_with('-') {
+                return Err(AppError::invalid("invalid external editor"));
+            }
+            c.args(["-a", app]);
         }
-        c.args(["-a", app]);
+        None => {
+            c.arg("-t");
+        }
     }
     c.arg("--").arg(&full);
     spawn(c)
@@ -46,6 +64,18 @@ pub fn reveal_in_finder(repo: &str, path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn git_dir_refused() {
+        assert!(is_inside_git_dir(".git/config"));
+        assert!(is_inside_git_dir("sub/.git/hooks/pre-commit"));
+        assert!(!is_inside_git_dir("src/.gitignore"));
+        assert!(!is_inside_git_dir(".github/workflows/ci.yml"));
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join(".git/hooks")).unwrap();
+        std::fs::write(d.path().join(".git/hooks/pre-commit"), "x").unwrap();
+        assert!(open_in_editor(d.path().to_str().unwrap(), ".git/hooks/pre-commit", None).is_err());
+    }
 
     #[test]
     fn rejects_escape() {

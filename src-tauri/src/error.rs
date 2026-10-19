@@ -65,6 +65,12 @@ pub fn classify_stderr(stderr: &str, exit_code: i32) -> AppError {
         || has("Permission denied (publickey)")
         || has("could not read Username")
         || has("could not read Password")
+        || has("Host key verification failed")
+        || has("Could not read from remote repository")
+        || has("error: 401")
+        || has("error: 403")
+        || has("HTTP 401")
+        || has("HTTP 403")
     {
         ErrorCode::AuthFailed
     } else if has("stale info") {
@@ -108,6 +114,13 @@ pub fn classify_stderr(stderr: &str, exit_code: i32) -> AppError {
     let message = pick
         .map(|l| l.strip_prefix("fatal: ").or_else(|| l.strip_prefix("error: ")).unwrap_or(l).to_string())
         .unwrap_or_else(|| format!("git exited with code {exit_code}"));
+    let message = if code == ErrorCode::Busy {
+        "A git lock file exists (.git/index.lock): another git process may be running, or the lock is stale. \
+         If no git operation is running, delete the lock file."
+            .to_string()
+    } else {
+        message
+    };
     AppError { code, message, stderr: Some(stderr.to_string()) }
 }
 
@@ -120,6 +133,11 @@ mod tests {
         let c = |s: &str| classify_stderr(s, 1).code;
         assert_eq!(c("fatal: not a git repository (or any of the parent directories): .git"), ErrorCode::NotARepo);
         assert_eq!(c("fatal: Authentication failed for 'x'"), ErrorCode::AuthFailed);
+        assert_eq!(c("fatal: unable to access 'https://x/': The requested URL returned error: 403"), ErrorCode::AuthFailed);
+        assert_eq!(c("remote: HTTP 401 Unauthorized"), ErrorCode::AuthFailed);
+        assert_eq!(c("Host key verification failed.\nfatal: Could not read from remote repository."), ErrorCode::AuthFailed);
+        assert_eq!(c("git@github.com: Permission denied (publickey)."), ErrorCode::AuthFailed);
+        assert!(classify_stderr("fatal: Unable to create '/r/.git/index.lock': File exists.", 128).message.contains("lock file"));
         assert_eq!(c("fatal: Not possible to fast-forward, aborting."), ErrorCode::NonFastForward);
         assert_eq!(c("error: Your local changes would be overwritten by checkout"), ErrorCode::WouldOverwrite);
         assert_eq!(c("There is no tracking information for the current branch."), ErrorCode::NoUpstream);

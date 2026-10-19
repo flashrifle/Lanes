@@ -170,7 +170,7 @@ pub enum GlobalAction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Item {
     /// `info`: disabled first row of the submenu (sync state + last fetch).
-    Repo { index: usize, title: String, info: Option<String>, actions: Vec<(RepoAction, String)> },
+    Repo { key: String, title: String, info: Option<String>, actions: Vec<(RepoAction, String)> },
     Empty(String),
     Separator,
     Global(GlobalAction, String),
@@ -238,7 +238,7 @@ pub fn build_model(repos: &[RepoSummary], lang: Lang, now: i64) -> Vec<Item> {
     }
     for (i, t) in titles(repos, lang).into_iter().enumerate() {
         items.push(Item::Repo {
-            index: i,
+            key: repo_key(&repos[i].path),
             title: t,
             info: sync_info(&repos[i], lang, now),
             actions: vec![
@@ -269,17 +269,36 @@ fn action_key(a: RepoAction) -> &'static str {
     }
 }
 
-pub fn repo_item_id(index: usize, a: RepoAction) -> String {
-    format!("tray.repo.{index}.{}", action_key(a))
+/// Stable id of a repo in menu item ids: 64-bit FNV-1a of the path as 16 hex digits. Unlike a list
+/// index it still names the same repo when the list is reordered between building and clicking a menu.
+pub fn repo_key(path: &str) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in path.bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("{h:016x}")
 }
 
-pub fn parse_repo_item_id(id: &str) -> Option<(usize, RepoAction)> {
+pub fn repo_item_id(key: &str, a: RepoAction) -> String {
+    format!("tray.repo.{key}.{}", action_key(a))
+}
+
+pub fn parse_repo_item_id(id: &str) -> Option<(String, RepoAction)> {
     let rest = id.strip_prefix("tray.repo.")?;
-    let (i, a) = rest.split_once('.')?;
+    let (key, a) = rest.split_once('.')?;
+    if key.len() != 16 || !key.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
     let action = [RepoAction::Pull, RepoAction::Push, RepoAction::Fetch, RepoAction::QuickCommit, RepoAction::OpenInLanes]
         .into_iter()
         .find(|x| action_key(*x) == a)?;
-    Some((i.parse().ok()?, action))
+    Some((key.to_string(), action))
+}
+
+/// The summary a clicked item id refers to, looked up in the summaries of the menu that was built.
+pub fn resolve_repo<'a>(repos: &'a [RepoSummary], key: &str) -> Option<&'a RepoSummary> {
+    repos.iter().find(|s| repo_key(&s.path) == key)
 }
 
 pub fn global_item_id(a: GlobalAction) -> &'static str {
@@ -374,13 +393,30 @@ mod tests {
 
     #[test]
     fn ids_roundtrip() {
+        let key = repo_key("/w/app");
         for a in [RepoAction::Pull, RepoAction::Push, RepoAction::Fetch, RepoAction::QuickCommit, RepoAction::OpenInLanes] {
-            assert_eq!(parse_repo_item_id(&repo_item_id(3, a)), Some((3, a)));
+            assert_eq!(parse_repo_item_id(&repo_item_id(&key, a)), Some((key.clone(), a)));
         }
+        assert_eq!(parse_repo_item_id("tray.repo.3.pull"), None);
         assert_eq!(parse_repo_item_id("tray.repo.x.pull"), None);
+        assert_ne!(repo_key("/w/app"), repo_key("/w/app2"));
+        assert_eq!(repo_key("/w/app"), repo_key("/w/app"));
         for g in [GlobalAction::OpenLanes, GlobalAction::Settings, GlobalAction::CheckUpdates, GlobalAction::Quit] {
             assert_eq!(parse_global_item_id(global_item_id(g)), Some(g));
         }
+    }
+
+    #[test]
+    fn click_resolves_by_stable_id_after_reorder() {
+        let before = vec![s("/w/a", "a", true), s("/w/b", "b", true)];
+        let m = build_model(&before, Lang::En, 0);
+        let Item::Repo { key, .. } = &m[1] else { panic!("expected repo item") };
+        let id = repo_item_id(key, RepoAction::Fetch);
+        // the list is reordered / shortened before the click: the id still names repo b, never another one
+        let after = vec![s("/w/c", "c", true), s("/w/b", "b", true)];
+        let (k, _) = parse_repo_item_id(&id).unwrap();
+        assert_eq!(resolve_repo(&after, &k).map(|r| r.path.as_str()), Some("/w/b"));
+        assert!(resolve_repo(&[s("/w/c", "c", true)], &k).is_none());
     }
 
     #[test]

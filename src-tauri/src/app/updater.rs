@@ -100,7 +100,12 @@ pub async fn install<R: Runtime>(app: &AppHandle<R>, pending: &Pending) -> Resul
             },
         )
         .await;
-    result.map_err(|e| fail(format!("update install failed: {e}")))
+    if let Err(e) = result {
+        // keep the update so the user can retry without a fresh check
+        *pending.lock().unwrap_or_else(|p| p.into_inner()) = Some(update);
+        return Err(fail(format!("update install failed: {e}")));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

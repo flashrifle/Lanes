@@ -12,6 +12,18 @@ pub const DEBOUNCE: Duration = Duration::from_millis(400);
 /// Work-tree events are noisy (builds, editors): longer debounce.
 pub const WORKTREE_DEBOUNCE: Duration = Duration::from_millis(1000);
 
+/// A scope is emitted at the latest this long after its first pending event, however long events keep arriving.
+pub const MAX_WAIT: Duration = Duration::from_secs(5);
+/// Worktree paths remembered per debounce window for the ignore check; more than this skips the check.
+const MAX_TRACKED_PATHS: usize = 512;
+
+/// How long to wait for the next event before a debounce window that started at `first` must close:
+/// `None` once `max` has elapsed (emit now), else `debounce` capped by the remaining max wait.
+pub fn debounce_timeout(first: Instant, now: Instant, debounce: Duration, max: Duration) -> Option<Duration> {
+    let left = max.checked_sub(now.saturating_duration_since(first))?;
+    (!left.is_zero()).then(|| debounce.min(left))
+}
+
 pub type Emitter = Arc<dyn Fn(RepoChangedEvent) + Send + Sync>;
 
 /// Classify a path relative to a git dir. None = irrelevant (locks, objects, logs...).
@@ -118,12 +130,111 @@ impl RepoWatcher {
     }
 }
 
+/// Pending (not yet emitted) scopes of one repo with their debounce deadlines.
+#[derive(Default)]
+struct Pending {
+    entries: Vec<Entry>,
+}
+
+struct Entry {
+    scope: RepoChangeScope,
+    /// each new event pushes this out, but never past `first + MAX_WAIT`
+    due: Instant,
+    first: Instant,
+    /// worktree scope only: the changed paths of the window (for the ignore check)
+    paths: Vec<PathBuf>,
+    overflow: bool,
+}
+
+struct Due {
+    scope: RepoChangeScope,
+    paths: Vec<PathBuf>,
+    overflow: bool,
+}
+
+impl Pending {
+    fn push(&mut self, scope: RepoChangeScope, path: &Path, now: Instant) {
+        let idx = match self.entries.iter().position(|e| e.scope == scope) {
+            Some(i) => i,
+            None => {
+                self.entries.push(Entry { scope, due: now, first: now, paths: Vec::new(), overflow: false });
+                self.entries.len() - 1
+            }
+        };
+        let e = &mut self.entries[idx];
+        e.due = (now + debounce_for(scope)).min(e.first + MAX_WAIT);
+        if scope == RepoChangeScope::Worktree && !e.overflow {
+            if e.paths.len() >= MAX_TRACKED_PATHS {
+                e.overflow = true;
+                e.paths.clear();
+            } else if !e.paths.iter().any(|p| p == path) {
+                e.paths.push(path.to_path_buf());
+            }
+        }
+    }
+
+    fn next_due(&self) -> Option<Instant> {
+        self.entries.iter().map(|e| e.due).min()
+    }
+
+    fn take_due(&mut self, now: Instant) -> Vec<Due> {
+        let mut out = Vec::new();
+        self.entries.retain_mut(|e| {
+            if e.due > now {
+                return true;
+            }
+            out.push(Due { scope: e.scope, paths: std::mem::take(&mut e.paths), overflow: e.overflow });
+            false
+        });
+        out
+    }
+}
+
+/// Is at least one of the changed worktree `paths` not ignored by git? One batched
+/// `git check-ignore --stdin -z`; any doubt (overflow, git failure) counts as "yes".
+fn worktree_has_unignored(repo_path: &str, roots: &Roots, paths: &[PathBuf], overflow: bool) -> bool {
+    if overflow || paths.is_empty() {
+        return true;
+    }
+    let mut rels: Vec<Vec<u8>> = Vec::new();
+    for p in paths {
+        let Some(rel) = roots.worktree.iter().find_map(|w| p.strip_prefix(w).ok()) else { return true };
+        rels.push(path_bytes(rel));
+    }
+    let mut input = Vec::new();
+    for r in &rels {
+        input.extend_from_slice(r);
+        input.push(0);
+    }
+    let Ok(o) = crate::git::runner::run_stdin_raw(repo_path, &["check-ignore", "--stdin", "-z"], input, true) else {
+        return true;
+    };
+    match o.code {
+        // 1 = none of the paths is ignored
+        1 => true,
+        0 => {
+            let ignored: std::collections::HashSet<&[u8]> = o.stdout.split(|b| *b == 0).filter(|s| !s.is_empty()).collect();
+            rels.iter().any(|r| !ignored.contains(r.as_slice()))
+        }
+        _ => true,
+    }
+}
+
+#[cfg(unix)]
+fn path_bytes(p: &Path) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    p.as_os_str().as_bytes().to_vec()
+}
+
+#[cfg(not(unix))]
+fn path_bytes(p: &Path) -> Vec<u8> {
+    p.to_string_lossy().replace('\\', "/").into_bytes()
+}
+
 fn debounce_loop(rx: mpsc::Receiver<notify::Result<Event>>, roots: Roots, repo_path: String, emit: Emitter) {
-    // scope -> time at which it is due (each new event pushes it out again)
-    let mut pending: Vec<(RepoChangeScope, Instant)> = Vec::new();
+    let mut pending = Pending::default();
     loop {
-        let next_due = pending.iter().map(|(_, d)| *d).min();
-        let res = match next_due {
+        let res = match pending.next_due() {
             None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
             Some(d) => rx.recv_timeout(d.saturating_duration_since(Instant::now())),
         };
@@ -132,27 +243,29 @@ fn debounce_loop(rx: mpsc::Receiver<notify::Result<Event>>, roots: Roots, repo_p
                 if matches!(ev.kind, EventKind::Access(_)) {
                     continue;
                 }
+                let now = Instant::now();
                 for p in &ev.paths {
                     if let Some(s) = classify(p, &roots) {
-                        let due = Instant::now() + debounce_for(s);
-                        match pending.iter_mut().find(|(k, _)| *k == s) {
-                            Some(e) => e.1 = due,
-                            None => pending.push((s, due)),
-                        }
+                        pending.push(s, p, now);
                     }
                 }
             }
             Ok(Err(_)) => {}
             Err(RecvTimeoutError::Timeout) => {
-                let now = Instant::now();
-                let mut scopes: Vec<RepoChangeScope> = pending.iter().filter(|(_, d)| *d <= now).map(|(s, _)| *s).collect();
-                pending.retain(|(_, d)| *d > now);
-                if !scopes.is_empty() {
-                    scopes.sort();
-                    emit(RepoChangedEvent { repo_path: repo_path.clone(), scopes });
-                }
+                // a steady event stream keeps `recv_timeout` from timing out: also flush after every event
             }
             Err(RecvTimeoutError::Disconnected) => break,
+        }
+        let mut scopes: Vec<RepoChangeScope> = Vec::new();
+        for d in pending.take_due(Instant::now()) {
+            if d.scope == RepoChangeScope::Worktree && !worktree_has_unignored(&repo_path, &roots, &d.paths, d.overflow) {
+                continue;
+            }
+            scopes.push(d.scope);
+        }
+        if !scopes.is_empty() {
+            scopes.sort();
+            emit(RepoChangedEvent { repo_path: repo_path.clone(), scopes });
         }
     }
 }
@@ -213,6 +326,71 @@ mod tests {
         assert_eq!(c("/r/.git/refs/heads/x"), Some(RepoChangeScope::Refs));
         assert_eq!(debounce_for(RepoChangeScope::Worktree), Duration::from_millis(1000));
         assert_eq!(debounce_for(RepoChangeScope::Index), DEBOUNCE);
+    }
+
+    #[test]
+    fn max_wait_caps_a_steady_event_stream() {
+        let t0 = Instant::now();
+        let mut p = Pending::default();
+        // an event every 300 ms for 8 s would postpone a 400 ms debounce forever
+        let mut flushed_at = None;
+        for i in 0..27u64 {
+            let now = t0 + Duration::from_millis(300 * i);
+            if !p.take_due(now).is_empty() {
+                flushed_at = Some(300 * i);
+                break;
+            }
+            p.push(RepoChangeScope::Index, Path::new("index"), now);
+        }
+        let at = flushed_at.expect("flushed despite continuous events");
+        assert!((5000..=5400).contains(&at), "flushed at {at} ms");
+        // the worktree scope is capped too, and dedups paths
+        let mut p = Pending::default();
+        p.push(RepoChangeScope::Worktree, Path::new("/r/a"), t0);
+        p.push(RepoChangeScope::Worktree, Path::new("/r/a"), t0 + Duration::from_millis(900));
+        assert_eq!(p.entries[0].paths.len(), 1);
+        p.push(RepoChangeScope::Worktree, Path::new("/r/a"), t0 + Duration::from_millis(4900));
+        assert_eq!(p.next_due(), Some(t0 + MAX_WAIT));
+    }
+
+    #[test]
+    fn ignored_worktree_paths_are_dropped() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().canonicalize().unwrap();
+        let git = |args: &[&str]| {
+            let o = std::process::Command::new("git").arg("-C").arg(&root).args(args).output().unwrap();
+            assert!(o.status.success(), "{args:?}: {}", String::from_utf8_lossy(&o.stderr));
+        };
+        git(&["init", "-q"]);
+        std::fs::write(root.join(".gitignore"), "node_modules/\ntarget\n*.log\n").unwrap();
+        std::fs::create_dir_all(root.join("node_modules/x")).unwrap();
+        std::fs::write(root.join("node_modules/x/i.js"), "1").unwrap();
+        std::fs::write(root.join("src.txt"), "1").unwrap();
+        let roots = Roots { git: vec![(root.join(".git"), true)], worktree: vec![root.clone()] };
+        let repo = root.to_str().unwrap();
+        let p = |s: &str| root.join(s);
+        // only ignored paths: no event
+        assert!(!worktree_has_unignored(repo, &roots, &[p("node_modules/x/i.js"), p("target/debug/a"), p("build.log")], false));
+        // one real change among ignored ones: event
+        assert!(worktree_has_unignored(repo, &roots, &[p("node_modules/x/i.js"), p("src.txt")], false));
+        // the ignore file itself, and a tracked file inside an ignored pattern, are real changes
+        assert!(worktree_has_unignored(repo, &roots, &[p(".gitignore")], false));
+        std::fs::write(root.join("tracked.log"), "1").unwrap();
+        git(&["add", "-f", "tracked.log"]);
+        assert!(worktree_has_unignored(repo, &roots, &[p("tracked.log")], false));
+        // overflow / empty: assume a change
+        assert!(worktree_has_unignored(repo, &roots, &[], false));
+        assert!(worktree_has_unignored(repo, &roots, &[p("target/x")], true));
+    }
+
+    #[test]
+    fn debounce_timeout_math() {
+        let t0 = Instant::now();
+        let d = Duration::from_secs(1);
+        assert_eq!(debounce_timeout(t0, t0, d, MAX_WAIT), Some(d));
+        assert_eq!(debounce_timeout(t0, t0 + Duration::from_millis(4500), d, MAX_WAIT), Some(Duration::from_millis(500)));
+        assert_eq!(debounce_timeout(t0, t0 + MAX_WAIT, d, MAX_WAIT), None);
+        assert_eq!(debounce_timeout(t0, t0 + Duration::from_secs(9), d, MAX_WAIT), None);
     }
 
     #[test]

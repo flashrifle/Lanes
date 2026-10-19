@@ -26,7 +26,7 @@ pub fn commit(locks: &RepoLocks, repo: &str, req: &CommitRequest, on_line: &mut 
         let o = run_opts(
             repo,
             &args,
-            Opts { timeout: locks.network_timeout, network: false, hooks: true, stdin: Some(req.message.clone().into_bytes()) },
+            Opts { timeout: locks.hook_timeout, network: false, hooks: true, stdin: Some(req.message.clone().into_bytes()) },
             on_line,
         )?;
         let o = check_all(o)?;

@@ -82,6 +82,10 @@ fn has_unmerged(repo: &str) -> Result<bool> {
     Ok(!run(repo, &["diff", "--name-only", "--diff-filter=U"], true)?.stdout.is_empty())
 }
 
+fn is_conflict(unmerged_before: bool, unmerged_after: bool, output: &str) -> bool {
+    (!unmerged_before && unmerged_after) || output.contains("CONFLICT")
+}
+
 pub fn apply(locks: &RepoLocks, repo: &str, s: &StashRef, pop: bool, restore_index: bool) -> Result<OpOutcome> {
     locks.run(repo, || {
         let sel = verify_ref(repo, s)?;
@@ -90,6 +94,7 @@ pub fn apply(locks: &RepoLocks, repo: &str, s: &StashRef, pop: bool, restore_ind
             args.push("--index");
         }
         args.push(&sel);
+        let unmerged_before = has_unmerged(repo)?;
         let o = w(locks, repo, &args)?;
         if o.ok() {
             let git_dir = git_dir_of(repo)?;
@@ -99,8 +104,10 @@ pub fn apply(locks: &RepoLocks, repo: &str, s: &StashRef, pop: bool, restore_ind
                 operation: detect_operation(Path::new(&git_dir)),
             });
         }
-        // A conflict is an outcome (the entry stays on the list for `pop`); anything else is an error.
-        if has_unmerged(repo)? {
+        // A conflict is an outcome (the entry stays on the list for `pop`): the apply itself left unmerged
+        // entries behind (or says CONFLICT). Unmerged entries that were already there (a merge in progress)
+        // make git refuse the apply, which is a plain error.
+        if is_conflict(unmerged_before, has_unmerged(repo)?, &o.combined()) {
             let git_dir = git_dir_of(repo)?;
             return Ok(OpOutcome {
                 message: o.summary(),
@@ -118,4 +125,17 @@ pub fn drop_entry(locks: &RepoLocks, repo: &str, s: &StashRef) -> Result<OpResul
         let o = check_all(w(locks, repo, &["stash", "drop", &sel])?)?;
         Ok(OpResult { message: o.summary() })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn conflict_detection() {
+        assert!(is_conflict(false, true, ""));
+        assert!(is_conflict(true, true, "CONFLICT (content): Merge conflict in a.txt"));
+        assert!(!is_conflict(true, true, "error: Cannot apply a stash in the middle of a merge"));
+        assert!(!is_conflict(false, false, "error: could not restore untracked files from stash"));
+    }
 }

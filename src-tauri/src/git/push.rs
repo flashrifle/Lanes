@@ -118,7 +118,7 @@ pub fn push(locks: &RepoLocks, repo: &str, req: &PushRequest, on_line: &mut dyn 
         }
         args.push(req.remote.clone());
         args.push(format!("refs/heads/{}:refs/heads/{}", req.local_branch, req.remote_branch));
-        let o = run_opts(repo, &args, Opts { timeout: locks.network_timeout, network: true, hooks: true, stdin: None }, on_line)?;
+        let o = run_opts(repo, &args, Opts { timeout: locks.hook_timeout, network: true, hooks: true, stdin: None }, on_line)?;
         let o = check_all(o)?;
         let all = o.combined();
         let message = if all.contains("Everything up-to-date") || all.lines().any(|l| l.starts_with('=')) {
@@ -139,7 +139,7 @@ pub fn push_tag(locks: &RepoLocks, repo: &str, remote: &str, name: &str, on_line
     locks.run(repo, || {
         let spec = format!("refs/tags/{name}:refs/tags/{name}");
         let args = ["push", "--progress", remote, spec.as_str()];
-        let o = run_opts(repo, &args, Opts { timeout: locks.network_timeout, network: true, hooks: true, stdin: None }, on_line)?;
+        let o = run_opts(repo, &args, Opts { timeout: locks.hook_timeout, network: true, hooks: true, stdin: None }, on_line)?;
         check_all(o)?;
         Ok(OpResult { message: format!("Pushed tag {name} to {remote}") })
     })

@@ -47,12 +47,41 @@ pub fn now_secs() -> i64 {
 impl Persist {
     /// `path` = state.json location; None = in-memory only.
     pub fn new(path: Option<PathBuf>) -> Self {
-        let state = path
-            .as_deref()
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
+        let state = path.as_deref().map(Self::load).unwrap_or_default();
         Persist { path, state: Mutex::new(state) }
+    }
+
+    /// Missing file = defaults. A file that exists but cannot be read/parsed is moved to
+    /// `state.json.bak` (one backup kept) before falling back to defaults, so the next save
+    /// does not silently destroy it.
+    fn load(p: &Path) -> StateFile {
+        let text = match std::fs::read_to_string(p) {
+            Ok(t) => t,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return StateFile::default(),
+            Err(e) => {
+                eprintln!("lanes: cannot read {}: {e}", p.display());
+                Self::back_up(p);
+                return StateFile::default();
+            }
+        };
+        match serde_json::from_str(&text) {
+            Ok(st) => st,
+            Err(e) => {
+                eprintln!("lanes: corrupt {}: {e}", p.display());
+                Self::back_up(p);
+                StateFile::default()
+            }
+        }
+    }
+
+    fn back_up(p: &Path) {
+        let mut name = p.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+        name.push(".bak");
+        let bak = p.with_file_name(name);
+        match std::fs::rename(p, &bak) {
+            Ok(()) => eprintln!("lanes: moved the unreadable state file to {}", bak.display()),
+            Err(e) => eprintln!("lanes: could not back up {}: {e}", p.display()),
+        }
     }
 
     fn save(&self, st: &StateFile) {
@@ -189,5 +218,22 @@ mod tests {
         let old = tempfile::tempdir().unwrap().keep().join("state.json");
         std::fs::write(&old, r#"{"recents":[],"favorites":{}}"#).unwrap();
         assert_eq!(Persist::new(Some(old)).settings(), AppSettings::default());
+    }
+
+    #[test]
+    fn corrupt_state_is_backed_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("state.json");
+        std::fs::write(&file, "{ not json").unwrap();
+        let p = Persist::new(Some(file.clone()));
+        assert_eq!(p.settings(), AppSettings::default());
+        assert_eq!(std::fs::read_to_string(dir.path().join("state.json.bak")).unwrap(), "{ not json");
+        assert!(!file.exists());
+        p.push_recent("/r", "r");
+        assert!(file.exists());
+        // a missing file is not a corruption
+        let other = tempfile::tempdir().unwrap();
+        Persist::new(Some(other.path().join("state.json")));
+        assert!(!other.path().join("state.json.bak").exists());
     }
 }

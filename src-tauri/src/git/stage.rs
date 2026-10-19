@@ -1,7 +1,7 @@
 //! Staging, discarding, line/hunk patches and conflict resolution. Every op takes the per-repo lock,
 //! uses `--literal-pathspecs`, validates paths (non-empty, no NUL, inside the repo) and never a shell.
 use super::ops::RepoLocks;
-use super::runner::{Opts, check_all, check_rel_path, check_rel_paths, run, run_opts, run_raw};
+use super::runner::{Opts, check_all, check_file_path, check_rel_path, check_rel_paths, run, run_opts, run_raw};
 use super::status;
 use crate::error::{AppError, ErrorCode, Result};
 use crate::models::*;
@@ -52,26 +52,44 @@ pub fn unstage_files(locks: &RepoLocks, repo: &str, paths: &[String]) -> Result<
     })
 }
 
-/// Exact tree entries of HEAD for `paths` (non-recursive, literal).
+/// Exact blob entries of HEAD for `paths` (non-recursive, literal). A path that is a directory is refused.
 fn head_entries(repo: &str, paths: &[String]) -> Result<HashSet<String>> {
-    let mut args = vec!["--literal-pathspecs", "ls-tree", "-z", "--name-only", "HEAD", "--"];
+    let mut args = vec!["--literal-pathspecs", "ls-tree", "-z", "HEAD", "--"];
     args.extend(paths.iter().map(String::as_str));
     let o = run(repo, &args, true)?;
-    Ok(o.text().split('\0').filter(|s| !s.is_empty()).map(str::to_string).collect())
+    let mut set = HashSet::new();
+    for rec in o.text().split('\0').filter(|s| !s.is_empty()) {
+        // "<mode> <type> <hash>\t<name>"
+        let Some((meta, name)) = rec.split_once('\t') else { continue };
+        if meta.split(' ').nth(1) == Some("tree") {
+            return Err(AppError::invalid(format!("not a file (directory): {name}")));
+        }
+        set.insert(name.to_string());
+    }
+    Ok(set)
 }
 
-/// Untracked paths (files, or directories holding only untracked files) must really be untracked
-/// and not ignored: `ls-files --others --exclude-standard`.
+/// Exact file entries of the index for `paths` (`ls-files --stage`, literal).
+fn index_entries(repo: &str, paths: &[String]) -> Result<HashSet<String>> {
+    let mut args = vec!["--literal-pathspecs", "ls-files", "--stage", "-z", "--"];
+    args.extend(paths.iter().map(String::as_str));
+    let o = run(repo, &args, true)?;
+    Ok(o.text()
+        .split('\0')
+        .filter_map(|rec| rec.split_once('\t').map(|(_, n)| n.to_string()))
+        .collect())
+}
+
+/// Untracked paths must be files that really are untracked and not ignored: they have to appear
+/// verbatim in `ls-files --others --exclude-standard` (directories are refused).
 fn verify_untracked(repo: &str, paths: &[String]) -> Result<()> {
     let mut args = vec!["--literal-pathspecs", "ls-files", "--others", "--exclude-standard", "-z", "--"];
     args.extend(paths.iter().map(String::as_str));
     let o = run(repo, &args, true)?;
-    let listed: Vec<String> = o.text().split('\0').filter(|s| !s.is_empty()).map(str::to_string).collect();
+    let listed: HashSet<String> = o.text().split('\0').filter(|s| !s.is_empty()).map(str::to_string).collect();
     for p in paths {
-        let trimmed = p.trim_end_matches('/');
-        let dir_prefix = format!("{trimmed}/");
-        if !listed.iter().any(|l| l == trimmed || l.starts_with(&dir_prefix)) {
-            return Err(AppError::invalid(format!("not an untracked file (tracked, ignored or missing): {p}")));
+        if !listed.contains(p) {
+            return Err(AppError::invalid(format!("not an untracked file (tracked, ignored, a directory or missing): {p}")));
         }
     }
     Ok(())
@@ -81,27 +99,44 @@ pub fn discard_files(locks: &RepoLocks, repo: &str, req: &DiscardRequest) -> Res
     if req.paths.is_empty() && req.untracked_paths.is_empty() {
         return Err(AppError::invalid("no paths given"));
     }
-    req.paths.iter().chain(&req.untracked_paths).try_for_each(|p| check_rel_path(p))?;
+    req.paths.iter().chain(&req.untracked_paths).try_for_each(|p| check_file_path(p))?;
     locks.run(repo, || {
         // Verify everything first so a refused path leaves nothing half-discarded.
         if !req.untracked_paths.is_empty() {
             verify_untracked(repo, &req.untracked_paths)?;
         }
         if !req.paths.is_empty() {
-            if req.include_staged {
-                if has_head(repo)? {
-                    let in_head = head_entries(repo, &req.paths)?;
-                    let (tracked, added): (Vec<String>, Vec<String>) =
-                        req.paths.iter().cloned().partition(|p| in_head.contains(p));
-                    if !tracked.is_empty() {
-                        write(locks, repo, &lit(&["restore", "--worktree", "--staged", "--source=HEAD"], &tracked), None)?;
-                    }
-                    if !added.is_empty() {
-                        // staged-new files: rollback removes them from index and disk
-                        write(locks, repo, &lit(&["rm", "-r", "-f", "-q", "--ignore-unmatch"], &added), None)?;
-                    }
+            // directories are refused whatever the mode: only exact file entries are discarded
+            let in_index = index_entries(repo, &req.paths)?;
+            for p in &req.paths {
+                let prefix = format!("{p}/");
+                if in_index.iter().any(|n| n.starts_with(&prefix)) {
+                    return Err(AppError::invalid(format!("not a file (directory): {p}")));
+                }
+            }
+        }
+        let (mut tracked, mut added): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+        if !req.paths.is_empty() && req.include_staged {
+            let in_head = if has_head(repo)? { head_entries(repo, &req.paths)? } else { HashSet::new() };
+            let in_index = index_entries(repo, &req.paths)?;
+            for p in &req.paths {
+                if in_head.contains(p) {
+                    tracked.push(p.clone());
+                } else if in_index.contains(p) {
+                    added.push(p.clone());
                 } else {
-                    write(locks, repo, &lit(&["rm", "-r", "-f", "-q", "--ignore-unmatch"], &req.paths), None)?;
+                    return Err(AppError::invalid(format!("not a tracked file: {p}")));
+                }
+            }
+        }
+        if !req.paths.is_empty() {
+            if req.include_staged {
+                if !tracked.is_empty() {
+                    write(locks, repo, &lit(&["restore", "--worktree", "--staged", "--source=HEAD"], &tracked), None)?;
+                }
+                if !added.is_empty() {
+                    // staged-new files (exact index entries): rollback removes them from index and disk
+                    write(locks, repo, &lit(&["rm", "-f", "-q", "--ignore-unmatch"], &added), None)?;
                 }
             } else {
                 write(locks, repo, &lit(&["restore", "--worktree"], &req.paths), None)?;
@@ -202,9 +237,21 @@ pub fn validate_patch(path: &str, patch: &str) -> Result<()> {
         return Err(AppError::invalid("patch header paths do not match the requested path"));
     }
     let (mut minus, mut plus) = (None, None);
-    for l in lines {
+    let rest: Vec<&str> = lines.collect();
+    let mut in_hunks = false;
+    for (i, l) in rest.iter().copied().enumerate() {
+        if in_hunks {
+            // Hunk bodies only hold ' ', '+', '-', '\\' lines; a second file header must not hide here.
+            let next_is_plus = rest.get(i + 1).is_some_and(|n| n.starts_with("+++ "));
+            let after_is_hunk = rest.get(i + 2).is_some_and(|n| n.starts_with("@@"));
+            if l.starts_with("diff --git ") || (l.starts_with("--- ") && next_is_plus && after_is_hunk) {
+                return Err(AppError::invalid("patch must touch exactly one file"));
+            }
+            continue;
+        }
         if l.starts_with("@@") {
-            break;
+            in_hunks = true;
+            continue;
         }
         if l.starts_with("diff --git ")
             || l.starts_with("rename ")
@@ -349,6 +396,15 @@ mod tests {
         );
         assert!(validate_patch("q\"x", &q).is_ok());
         assert!(validate_patch("../f.txt", ok).is_err());
+        // a second file hidden after the first hunk
+        let two = format!("{ok}diff --git a/g.txt b/g.txt\n--- a/g.txt\n+++ b/g.txt\n@@ -1 +1 @@\n-x\n+y\n");
+        assert!(validate_patch("f.txt", &two).is_err());
+        // header pair without the `diff --git` line
+        let two = format!("{ok}--- a/g.txt\n+++ b/g.txt\n@@ -1 +1 @@\n-x\n+y\n");
+        assert!(validate_patch("f.txt", &two).is_err());
+        // a removed line that merely looks like a header is fine
+        let dashes = "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1,2 +1,2 @@\n--- x\n+++ y\n ctx\n";
+        assert!(validate_patch("f.txt", dashes).is_ok());
     }
 
     #[test]

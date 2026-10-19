@@ -1262,3 +1262,143 @@ fn discard_staged_rename_restores_old_and_removes_new() {
     assert!(r.dir.join("old.txt").exists() && !r.dir.join("new.txt").exists());
     assert!(r.status().files.is_empty());
 }
+
+// ───────────── review-fix regressions ─────────────
+
+#[test]
+fn reflog_time_is_when_the_ref_moved_not_commit_time() {
+    let r = TestRepo::new();
+    let c1 = r.commit_file("a.txt", "a\n", "first");
+    r.commit_file("a.txt", "b\n", "second");
+    let commit_time: i64 = r.git(&["log", "-1", "--format=%ct", &c1]).parse().unwrap();
+    // checking out the old commit now: the entry is stamped with the wall clock, the commit is from 2023
+    ops::checkout(&r.locks, r.path(), &CheckoutTarget::Commit { hash: c1.clone() }, &mut quiet()).unwrap();
+    let log = reflog::reflog(r.path(), None, None).unwrap();
+    assert_eq!(log.entries[0].selector, "HEAD@{0}");
+    assert_eq!(log.entries[0].hash, c1);
+    assert!(log.entries[0].time > commit_time + 1_000_000, "time {} vs commit {}", log.entries[0].time, commit_time);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+    assert!((now - log.entries[0].time).abs() < 120);
+    // selectors stay position based
+    assert_eq!(log.entries[1].selector, "HEAD@{1}");
+}
+
+#[test]
+fn discard_refuses_directories_and_never_deletes_committed_files() {
+    let r = TestRepo::new();
+    r.commit_file("dir/a.txt", "a\n", "one");
+    r.commit_file("dir/b.txt", "b\n", "two");
+    r.write("dir/a.txt", "changed\n");
+    r.write("untracked_dir/u.txt", "u\n");
+    for (paths, untracked, staged) in [
+        (vec!["dir/"], vec![], true),
+        (vec!["dir"], vec![], true),
+        (vec!["dir"], vec![], false),
+        (vec![], vec!["untracked_dir"], false),
+        (vec![], vec!["untracked_dir/"], false),
+    ] {
+        let req = DiscardRequest { paths: strs(&paths), untracked_paths: strs(&untracked), include_staged: staged };
+        assert_eq!(code(stage::discard_files(&r.locks, r.path(), &req)), ErrorCode::InvalidArgument, "{paths:?} {untracked:?}");
+    }
+    assert!(r.dir.join("dir/a.txt").exists() && r.dir.join("dir/b.txt").exists());
+    assert_eq!(r.read("dir/a.txt"), "changed\n");
+    assert!(r.dir.join("untracked_dir/u.txt").exists());
+    // a path that is neither in HEAD nor the index is refused instead of silently ignored
+    let req = DiscardRequest { paths: strs(&["nope.txt"]), untracked_paths: vec![], include_staged: true };
+    assert_eq!(code(stage::discard_files(&r.locks, r.path(), &req)), ErrorCode::InvalidArgument);
+}
+
+#[test]
+fn apply_patch_rejects_a_second_file_after_the_first_hunk() {
+    let r = TestRepo::new();
+    r.commit_file("f.txt", "a\n", "one");
+    r.commit_file("g.txt", "g\n", "two");
+    r.write("f.txt", "b\n");
+    r.write("g.txt", "h\n");
+    let patch = raw_diff(&r, &[]);
+    assert!(patch.matches("diff --git ").count() == 2);
+    let req = ApplyPatchRequest { path: "f.txt".into(), patch, target: PatchTarget::Index, reverse: false };
+    assert_eq!(code(stage::apply_patch(&r.locks, r.path(), &req)), ErrorCode::InvalidArgument);
+    assert!(r.status().files.iter().all(|f| f.staged.is_none()), "nothing may be staged");
+}
+
+#[test]
+fn stash_apply_error_during_merge_is_not_reported_as_conflict() {
+    let r = TestRepo::new();
+    r.commit_file("g.txt", "g\n", "g");
+    r.write("g.txt", "g2\n");
+    stash::save(&r.locks, r.path(), &StashSaveRequest { message: None, include_untracked: false, keep_index: false, paths: None }).unwrap();
+    r.conflict_setup();
+    let o = git_raw(&r.dir, &["merge", "feature"]);
+    assert!(!o.status.success());
+    let entry = stash::list(r.path()).unwrap().remove(0);
+    let res = stash::apply(&r.locks, r.path(), &StashRef { index: 0, hash: entry.hash }, false, false);
+    assert!(res.is_err(), "unmerged entries from the merge must not look like a stash conflict: {res:?}");
+}
+
+#[test]
+fn status_upstream_of_a_local_branch() {
+    let r = TestRepo::new();
+    r.commit_file("a.txt", "a\n", "one");
+    r.git(&["branch", "base"]);
+    r.git(&["branch", "--set-upstream-to=base", "main"]);
+    let st = r.status();
+    assert_eq!(st.upstream.as_deref(), Some("refs/heads/base"));
+}
+
+#[test]
+fn every_git_run_uses_the_login_path() {
+    let r = TestRepo::new();
+    let o = runner::run(r.path(), &["-c", "alias.p=!printf %s \"$PATH\"", "p"], true).unwrap();
+    // (git prepends its own exec-path)
+    assert!(o.text().ends_with(runner::login_path()), "{}", o.text());
+}
+
+#[cfg(unix)]
+#[test]
+fn timeout_sends_sigterm_before_sigkill() {
+    use std::os::unix::fs::PermissionsExt;
+    let r = TestRepo::new();
+    r.commit_file("a.txt", "a\n", "base");
+    r.git(&["branch", "other"]);
+    let mark = r.dir.parent().unwrap().join("got-term");
+    let hook = r.dir.join(".git/hooks/post-checkout");
+    std::fs::write(&hook, format!("#!/bin/sh\ntrap 'touch \"{}\"; exit 0' TERM\nsleep 30 &\nwait\n", mark.display())).unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let locks = RepoLocks::with_timeouts(std::time::Duration::from_millis(500), std::time::Duration::from_millis(500));
+    let e = ops::checkout(&locks, r.path(), &CheckoutTarget::LocalBranch { name: "other".into() }, &mut quiet()).unwrap_err();
+    assert!(e.message.contains("timed out"), "{}", e.message);
+    assert!(mark.exists(), "the hook must get SIGTERM (a chance to clean up) before any SIGKILL");
+    // a hook that ignores SIGTERM is still stopped, after the grace period
+    std::fs::remove_file(&mark).unwrap();
+    std::fs::remove_file(&hook).unwrap();
+    r.git(&["checkout", "-q", "main"]);
+    std::fs::write(&hook, "#!/bin/sh\ntrap '' TERM\nsleep 30\n").unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let t = std::time::Instant::now();
+    let e = ops::checkout(&locks, r.path(), &CheckoutTarget::LocalBranch { name: "other".into() }, &mut quiet()).unwrap_err();
+    assert!(e.message.contains("timed out"), "{}", e.message);
+    assert!(t.elapsed() < std::time::Duration::from_secs(15));
+}
+
+#[test]
+fn fetch_uses_the_network_lock_not_the_write_lock() {
+    let l = RepoLocks::default();
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().to_str().unwrap();
+    // a running fetch does not make a write op busy ...
+    l.run_network(p, || {
+        assert!(l.run(p, || Ok(())).is_ok());
+        // ... but a second fetch is busy
+        assert_eq!(code(l.run_network(p, || Ok(()))), ErrorCode::Busy);
+        Ok(())
+    })
+    .unwrap();
+    // and a running write op does not block fetch
+    l.run(p, || {
+        assert!(l.run_network(p, || Ok(())).is_ok());
+        assert_eq!(code(l.run(p, || Ok(()))), ErrorCode::Busy);
+        Ok(())
+    })
+    .unwrap();
+}

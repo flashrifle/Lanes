@@ -30,6 +30,13 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_positioner::init())
         .on_menu_event(|app, ev| {
+            if ev.id().as_ref() == menu::ID_CLOSE_WINDOW {
+                // goes through CloseRequested, so keep-running still hides the main window
+                if let Some(w) = app.webview_windows().values().find(|w| w.is_focused().unwrap_or(false)) {
+                    let _ = w.close();
+                }
+                return;
+            }
             if let Some(action) = menu::action_for_id(ev.id().as_ref()) {
                 tray::lifecycle::dispatch_menu_action(app, action);
             }
@@ -56,7 +63,7 @@ pub fn run() {
             let file = app.path().app_config_dir().ok().map(|d| d.join("state.json"));
             let st = state::AppState::new(file);
             let settings = st.persist.settings();
-            app::settings::apply_git_path(&settings);
+            app::settings::apply_persisted_git_path(&settings);
             app.manage(st);
             // resolve the login-shell PATH once, off the main thread (2 s timeout)
             std::thread::spawn(|| {

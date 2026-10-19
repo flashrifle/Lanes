@@ -43,13 +43,10 @@ static GIT_OVERRIDE: RwLock<Option<PathBuf>> = RwLock::new(None);
 /// `git --version` of a candidate ("2.50.1"), or None when it is not a working git (the macOS
 /// /usr/bin/git shim fails when the command line tools are missing).
 pub fn probe_version(p: &Path) -> Option<String> {
-    let o = Command::new(p)
-        .arg("--version")
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !o.status.success() || !o.stdout.starts_with(b"git version") {
+    let mut c = Command::new(p);
+    c.arg("--version").stdin(Stdio::null());
+    let (o, _) = exec(c, Limits { timeout: Some(Duration::from_secs(5)), max_stdout: Some(4096), stdin: None }, &mut |_| {}).ok()?;
+    if !o.ok() || !o.stdout.starts_with(b"git version") {
         return None;
     }
     let text = String::from_utf8_lossy(&o.stdout);
@@ -141,7 +138,7 @@ fn resolve_login_path() -> String {
     }
 }
 
-/// PATH given to hook-running write ops. Resolved once (2 s timeout); call early at startup.
+/// PATH given to every git run. Resolved once (2 s timeout); call early at startup.
 pub fn login_path() -> &'static str {
     LOGIN_PATH.get_or_init(resolve_login_path)
 }
@@ -166,7 +163,9 @@ fn command<S: AsRef<OsStr>>(repo: &str, args: &[S], read_only: bool) -> Result<C
     }
     c.args(["-C", repo, "-c", "core.quotepath=false", "-c", "color.ui=false", "-c", "log.showSignature=false"]);
     c.args(args);
-    c.env("GIT_TERMINAL_PROMPT", "0")
+    // Always the login-shell PATH (git-lfs filters, smudge/clean drivers, credential helpers, hooks).
+    c.env("PATH", login_path())
+        .env("GIT_TERMINAL_PROMPT", "0")
         .env("LC_ALL", "C")
         .env("GIT_EDITOR", "true")
         .env("GIT_MERGE_AUTOEDIT", "no")
@@ -177,19 +176,17 @@ fn command<S: AsRef<OsStr>>(repo: &str, args: &[S], read_only: bool) -> Result<C
     Ok(c)
 }
 
-fn to_output(o: std::process::Output) -> Output {
-    Output {
-        stdout: o.stdout,
-        stderr: String::from_utf8_lossy(&o.stderr).into_owned(),
-        code: o.status.code().unwrap_or(-1),
-    }
-}
-
 /// Run git; returns the output whatever the exit code.
 pub fn run_raw<S: AsRef<OsStr>>(repo: &str, args: &[S], read_only: bool) -> Result<Output> {
-    let mut c = command(repo, args, read_only)?;
-    Ok(to_output(c.output()?))
+    let c = command(repo, args, read_only)?;
+    let (o, _) = exec(c, Limits { timeout: Some(READ_TIMEOUT), max_stdout: None, stdin: None }, &mut |_| {})?;
+    Ok(o)
 }
+
+/// Deadline for runs that have no caller-supplied timeout (read-only queries, stdin helpers).
+const READ_TIMEOUT: Duration = Duration::from_secs(120);
+/// SIGTERM grace before SIGKILL when a deadline passes.
+const KILL_GRACE: Duration = Duration::from_secs(3);
 
 /// Run git; non-zero exit becomes a classified error.
 pub fn run<S: AsRef<OsStr>>(repo: &str, args: &[S], read_only: bool) -> Result<Output> {
@@ -203,16 +200,9 @@ fn check(o: Output) -> Result<Output> {
 
 /// Run git with `input` on stdin; returns output whatever the exit code.
 pub fn run_stdin_raw<S: AsRef<OsStr>>(repo: &str, args: &[S], input: Vec<u8>, read_only: bool) -> Result<Output> {
-    let mut c = command(repo, args, read_only)?;
-    c.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = c.spawn()?;
-    let mut stdin = child.stdin.take().expect("piped stdin");
-    let writer = std::thread::spawn(move || {
-        let _ = stdin.write_all(&input);
-    });
-    let out = child.wait_with_output()?;
-    let _ = writer.join();
-    Ok(to_output(out))
+    let c = command(repo, args, read_only)?;
+    let (o, _) = exec(c, Limits { timeout: Some(READ_TIMEOUT), max_stdout: None, stdin: Some(input) }, &mut |_| {})?;
+    Ok(o)
 }
 
 /// Command output with stdout and stderr joined, for classifying commands that report errors on stdout.
@@ -231,17 +221,33 @@ pub fn run_stdin<S: AsRef<OsStr>>(repo: &str, args: &[S], input: Vec<u8>, read_o
     check(run_stdin_raw(repo, args, input, read_only)?)
 }
 
-/// Kill the child (and its process group on unix, so ssh/hook grandchildren release the pipes).
-fn kill_tree(child: &mut std::process::Child) {
+/// Stop the child and its process group (so ssh/hook grandchildren release the pipes): SIGTERM first so
+/// git can drop its lock files and hooks can clean up, SIGKILL after `grace` if it is still running.
+fn kill_tree(child: &mut std::process::Child, grace: Duration) {
     #[cfg(unix)]
-    {
+    fn signal_group(sig: &str, pid: u32) {
         let _ = Command::new("kill")
-            .args(["-KILL", "--", &format!("-{}", child.id())])
+            .args([sig, "--", &format!("-{pid}")])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
     }
+    #[cfg(unix)]
+    if !grace.is_zero() {
+        signal_group("-TERM", child.id());
+        let end = Instant::now() + grace;
+        while Instant::now() < end {
+            if matches!(child.try_wait(), Ok(Some(_))) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    }
+    #[cfg(unix)]
+    signal_group("-KILL", child.id());
+    #[cfg(not(unix))]
+    let _ = grace;
     let _ = child.kill();
     let _ = child.wait();
 }
@@ -317,7 +323,7 @@ fn exec(mut c: Command, mut limits: Limits, on_line: &mut dyn FnMut(&str)) -> Re
                 {
                     out.truncate(max);
                     truncated = true;
-                    kill_tree(&mut child);
+                    kill_tree(&mut child, Duration::ZERO);
                     break;
                 }
             }
@@ -337,7 +343,7 @@ fn exec(mut c: Command, mut limits: Limits, on_line: &mut dyn FnMut(&str)) -> Re
             Ok(Chunk::OutDone) => out_done = true,
             Ok(Chunk::ErrDone) => err_done = true,
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                kill_tree(&mut child);
+                kill_tree(&mut child, KILL_GRACE);
                 let secs = limits.timeout.map(|t| t.as_secs_f32()).unwrap_or(0.0);
                 let mut e = AppError::new(ErrorCode::GitFailed, format!("git timed out after {secs:.0}s and was stopped"));
                 e.stderr = Some(String::from_utf8_lossy(&all_err).into_owned());
@@ -388,7 +394,7 @@ pub struct Opts {
     pub timeout: Duration,
     /// non-interactive ssh default
     pub network: bool,
-    /// runs hooks: PATH becomes the login-shell PATH
+    /// informational: the op may run hooks (every git run already uses the login-shell PATH)
     pub hooks: bool,
     pub stdin: Option<Vec<u8>>,
 }
@@ -400,9 +406,6 @@ pub fn run_opts<S: AsRef<OsStr>>(repo: &str, args: &[S], o: Opts, on_line: &mut 
     let mut c = command(repo, args, false)?;
     if o.network {
         apply_network(&mut c, repo);
-    }
-    if o.hooks {
-        c.env("PATH", login_path());
     }
     let (out, _) = exec(c, Limits { timeout: Some(o.timeout), max_stdout: None, stdin: o.stdin }, on_line)?;
     Ok(out)
@@ -450,6 +453,15 @@ pub fn check_rel_path(p: &str) -> Result<()> {
         || path.components().any(|c| matches!(c, std::path::Component::ParentDir | std::path::Component::Prefix(_)))
     {
         return Err(AppError::invalid(format!("path must be inside the repository: {p:?}")));
+    }
+    Ok(())
+}
+
+/// A repo-relative path that names a file: like [`check_rel_path`] but a trailing `/` (directory) is refused.
+pub fn check_file_path(p: &str) -> Result<()> {
+    check_rel_path(p)?;
+    if p.ends_with('/') {
+        return Err(AppError::invalid(format!("expected a file path, not a directory: {p:?}")));
     }
     Ok(())
 }

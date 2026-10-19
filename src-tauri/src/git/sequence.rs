@@ -17,9 +17,9 @@ fn has_unmerged(repo: &str) -> Result<bool> {
     Ok(!run(repo, &["diff", "--name-only", "--diff-filter=U"], true)?.stdout.is_empty())
 }
 
-/// Hook-running command (login PATH, 300 s), output whatever the exit code.
+/// Hook-running command (30 min), output whatever the exit code.
 fn exec(locks: &RepoLocks, repo: &str, args: &[String], on_line: &mut dyn FnMut(&str)) -> Result<Output> {
-    run_opts(repo, args, Opts { timeout: locks.network_timeout, network: false, hooks: true, stdin: None }, on_line)
+    run_opts(repo, args, Opts { timeout: locks.hook_timeout, network: false, hooks: true, stdin: None }, on_line)
 }
 
 /// Runs a git command that may stop half-way. `before` = operation in progress before the command.
@@ -212,7 +212,7 @@ pub fn reset(locks: &RepoLocks, repo: &str, req: &ResetRequest) -> Result<OpResu
         let o = run_opts(
             repo,
             &["reset", flag, hash.as_str()],
-            Opts { timeout: locks.local_timeout, network: false, hooks: true, stdin: None },
+            Opts { timeout: locks.hook_timeout, network: false, hooks: true, stdin: None },
             &mut |_| {},
         )?;
         let o = check_all(o)?;

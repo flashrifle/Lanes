@@ -1,10 +1,12 @@
 //! Reflog, branch compare and rev ranges (read-only).
-use super::runner::{check_not_option, run, run_raw};
+use super::runner::{check_not_option, run, run_capped, run_raw};
 use crate::error::{AppError, Result};
 use crate::models::*;
 use std::collections::HashSet;
 
 pub const DEFAULT_LIMIT: u32 = 1000;
+/// ~1.5 million commits worth of hashes.
+const MAX_RANGE_BYTES: usize = 64 * 1024 * 1024;
 
 /// `%gs` -> (action, message): "commit (amend): msg" -> ("commit (amend)", "msg").
 pub fn split_subject(gs: &str) -> (String, String) {
@@ -12,6 +14,12 @@ pub fn split_subject(gs: &str) -> (String, String) {
         Some((a, m)) => (a.to_string(), m.to_string()),
         None => (gs.to_string(), String::new()),
     }
+}
+
+/// Unix time of the reflog entry from `%gd` rendered with `--date=unix` ("HEAD@{1700000000}").
+/// This is when the ref moved, not the commit time.
+fn selector_time(gd: &str) -> i64 {
+    gd.rsplit_once("@{").and_then(|(_, t)| t.strip_suffix('}')).and_then(|t| t.parse().ok()).unwrap_or(0)
 }
 
 pub fn reflog(repo: &str, ref_name: Option<&str>, limit: Option<u32>) -> Result<Reflog> {
@@ -28,7 +36,7 @@ pub fn reflog(repo: &str, ref_name: Option<&str>, limit: Option<u32>) -> Result<
     }
     let o = run(
         repo,
-        &["log", "-g", "--format=%H%x1f%ct%x1f%gs", &format!("-n{}", limit + 1), r, "--"],
+        &["log", "-g", "--date=unix", "--format=%H%x1f%gd%x1f%gs", &format!("-n{}", limit + 1), r, "--"],
         true,
     )?;
     let mut entries: Vec<ReflogEntry> = o
@@ -46,7 +54,7 @@ pub fn reflog(repo: &str, ref_name: Option<&str>, limit: Option<u32>) -> Result<
                 hash: f[0].to_string(),
                 action,
                 message,
-                time: f[1].parse().unwrap_or(0),
+                time: selector_time(f[1]),
             })
         })
         .collect();
@@ -72,13 +80,24 @@ pub fn compare_refs(repo: &str, a: &str, b: &str) -> Result<CompareSummary> {
 pub fn rev_range_hashes(repo: &str, r: &RevRange) -> Result<HashSet<String>> {
     check_not_option("include", &r.include)?;
     check_not_option("exclude", &r.exclude)?;
-    let o = run(repo, &["rev-list", &r.include, &format!("^{}", r.exclude), "--"], true)?;
+    let (o, truncated) =
+        run_capped(repo, &["rev-list", &r.include, &format!("^{}", r.exclude), "--"], MAX_RANGE_BYTES)?;
+    if truncated {
+        return Err(AppError::new(crate::error::ErrorCode::GitFailed, "the commit range is too large to filter"));
+    }
     Ok(o.text().lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selector_times() {
+        assert_eq!(selector_time("HEAD@{1700000000}"), 1_700_000_000);
+        assert_eq!(selector_time("feature/x@{42}"), 42);
+        assert_eq!(selector_time("garbage"), 0);
+    }
 
     #[test]
     fn subjects() {

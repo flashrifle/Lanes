@@ -10,6 +10,10 @@ use tauri::{AppHandle, Runtime};
 pub const ID_SETTINGS: &str = "lanes.settings";
 pub const ID_UPDATES: &str = "lanes.checkForUpdates";
 pub const ID_REPORT: &str = "lanes.reportIssue";
+pub const ID_CLOSE_WINDOW: &str = "lanes.closeWindow";
+/// Not plain Cmd+W: a native accelerator would swallow it before the webview, where Cmd+W closes
+/// a tab (main window) or the window itself (diff/history windows).
+pub const CLOSE_WINDOW_ACCELERATOR: &str = "CmdOrCtrl+Shift+W";
 
 pub fn action_for_id(id: &str) -> Option<MenuAction> {
     match id {
@@ -158,7 +162,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, lang: Lang) -> tauri::Result<Menu<R
         app,
         s.file,
         true,
-        &[&PredefinedMenuItem::close_window(app, Some(s.close_window))?],
+        &[&MenuItemBuilder::with_id(ID_CLOSE_WINDOW, s.close_window).accelerator(CLOSE_WINDOW_ACCELERATOR).build(app)?],
     )?;
     let edit_menu = Submenu::with_items(
         app,
@@ -189,7 +193,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>, lang: Lang) -> tauri::Result<Menu<R
             &PredefinedMenuItem::minimize(app, Some(s.minimize))?,
             &PredefinedMenuItem::maximize(app, Some(s.zoom))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::close_window(app, Some(s.close_window))?,
+            &MenuItemBuilder::with_id(ID_CLOSE_WINDOW, s.close_window).accelerator(CLOSE_WINDOW_ACCELERATOR).build(app)?,
         ],
     )?;
     let help_menu = Submenu::with_id_and_items(app, HELP_SUBMENU_ID,
@@ -220,5 +224,7 @@ mod tests {
         assert_eq!(action_for_id(ID_UPDATES), Some(MenuAction::CheckForUpdates));
         assert_eq!(action_for_id(ID_REPORT), Some(MenuAction::ReportIssue));
         assert_eq!(action_for_id("other"), None);
+        assert_eq!(action_for_id(ID_CLOSE_WINDOW), None);
+        assert!(!CLOSE_WINDOW_ACCELERATOR.ends_with("+W") || CLOSE_WINDOW_ACCELERATOR.contains("Shift"));
     }
 }

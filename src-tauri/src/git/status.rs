@@ -213,6 +213,15 @@ pub fn read(repo: &str) -> Result<WorkingTreeStatus> {
     )?;
     let mut p = parse_porcelain_v2(&o.stdout);
     p.truncated |= cut;
+    // porcelain prints a short name; "refs/remotes/" + it is wrong for a local upstream (remote = '.')
+    if let (Some(up), Some(b)) = (&mut p.upstream, &p.branch)
+        && let Ok(o) = run(repo, &["for-each-ref", "--format=%(upstream)", &format!("refs/heads/{b}")], true)
+    {
+        let full = o.text().trim().to_string();
+        if full.starts_with("refs/") {
+            *up = full;
+        }
+    }
     let git_dir = git_dir_of(repo)?;
     let has_conflicts = p.files.iter().any(|f| f.conflict.is_some());
     let operation = operation_state(repo, Path::new(&git_dir), has_conflicts);

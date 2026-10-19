@@ -82,6 +82,22 @@ pub fn apply_git_path(s: &AppSettings) {
     runner::set_git_override(s.git_path.as_deref().map(Path::new).map(Path::to_path_buf));
 }
 
+/// Startup variant: a persisted git path that no longer works (moved, removed, broken) is not applied,
+/// so git falls back to auto-detect instead of failing every command. Returns whether the override was applied.
+pub fn apply_persisted_git_path(s: &AppSettings) -> bool {
+    match s.git_path.as_deref() {
+        Some(p) if !validate_git_path(Some(p)).ok => {
+            eprintln!("lanes: configured git path {p:?} is not usable; falling back to auto-detect");
+            runner::set_git_override(None);
+            false
+        }
+        _ => {
+            apply_git_path(s);
+            s.git_path.is_some()
+        }
+    }
+}
+
 /// Validate, persist, apply the git path; returns the stored value.
 pub fn store(persist: &Persist, settings: AppSettings) -> Result<AppSettings> {
     let s = normalize(settings);
@@ -129,6 +145,9 @@ mod tests {
         assert!(validate(&s).is_err());
         assert!(!validate_git_path(Some("/definitely/not/git")).ok);
         assert!(validate_git_path(None).ok);
+        let bad = AppSettings { git_path: Some("/definitely/not/git".into()), ..Default::default() };
+        assert!(!apply_persisted_git_path(&bad));
+        assert!(runner::git_override().is_none());
         assert!(keeps_running(&AppSettings::default()));
         let off = AppSettings { menu_bar_icon: false, ..Default::default() };
         assert!(!keeps_running(&off));
