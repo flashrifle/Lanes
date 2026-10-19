@@ -19,7 +19,7 @@ SRC = os.path.abspath(os.path.join(HERE, '..', '..'))
 
 # Public, non-personal identity for every replayed commit.
 AUTHOR_NAME = 'flashrifle'
-AUTHOR_EMAIL = 'flashrifle@users.noreply.github.com'
+AUTHOR_EMAIL = 'info@j-lab.site'
 
 # Short subjects for the Korean set where the original wording names third-party marks.
 KO_OVERRIDES = {
