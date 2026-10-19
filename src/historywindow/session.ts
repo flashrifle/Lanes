@@ -2,6 +2,7 @@
 // payload, a Tauri event re-targets the single shared history window.
 import { emitTo } from '@tauri-apps/api/event';
 import { getAllWebviewWindows, WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import type { LineRange } from '../types';
 
 export interface HistorySession {
   repoPath: string;
@@ -9,6 +10,19 @@ export interface HistorySession {
   path: string;          // repo-relative file path
   rev: string | null;    // history start revision; null = HEAD
   selectHash?: string;   // commit to select once the history is loaded
+  lineRange?: LineRange; // open in line-history mode (git log -L) for these 1-based lines of `path` at `rev`
+}
+
+const MAX_LINE = 10_000_000;
+
+/** Validates an untrusted line range: integers, 1 <= start <= end <= 10M. */
+export function parseLineRange(v: unknown): LineRange | null {
+  if (!v || typeof v !== 'object') return null;
+  const { start, end } = v as Record<string, unknown>;
+  if (typeof start !== 'number' || typeof end !== 'number') return null;
+  if (!Number.isInteger(start) || !Number.isInteger(end)) return null;
+  if (start < 1 || end < start || end > MAX_LINE) return null;
+  return { start, end };
 }
 
 export const HISTORY_WINDOW_LABEL_PREFIX = 'history-';
@@ -50,6 +64,8 @@ export function parseHistorySession(v: unknown): HistorySession | null {
     rev,
   };
   if (typeof o.selectHash === 'string' && /^[0-9a-f]{4,64}$/i.test(o.selectHash)) s.selectHash = o.selectHash;
+  const lineRange = parseLineRange(o.lineRange);
+  if (lineRange) s.lineRange = lineRange;
   return s;
 }
 

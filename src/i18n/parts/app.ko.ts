@@ -1,5 +1,80 @@
 // i18n part owned by ui-app (prefixes: settings.* update.* report.* history.*). Spread into src/i18n/ko.ts.
-import type { Entry } from '../ko';
+import type { Entry, Params } from '../ko';
+
+const n = (v: string | number): string => Number(v).toLocaleString('ko-KR');
 
 export const appKo = {
+  // settings
+  'settings.title': '설정',
+  'settings.close': '닫기',
+  'settings.language': '언어',
+  'settings.language.system': '시스템 설정 따르기',
+  'settings.language.ko': '한국어',
+  'settings.language.en': 'English',
+  'settings.density': '로그 행 높이',
+  'settings.dateFormat': '날짜 표시',
+  'settings.date.relative': '상대 (오늘, 어제)',
+  'settings.date.absolute': '절대 (2026-10-03 17:23)',
+  'settings.git': 'Git 실행 파일',
+  'settings.git.auto': '자동 감지',
+  'settings.git.custom': '직접 지정',
+  'settings.git.pathPh': '/opt/homebrew/bin/git',
+  'settings.git.check': '확인 후 적용',
+  'settings.git.checking': '확인하는 중…',
+  'settings.git.found': (p: Params) => `git ${p.version} · ${p.path}`,
+  'settings.git.notFound': 'git을 찾을 수 없습니다',
+  'settings.git.applied': '적용되었습니다',
+  'settings.editor': '외부 편집기',
+  'settings.editor.ph': '앱 이름 또는 .app 경로 (비우면 기본 앱)',
+  'settings.editor.hint': '예: Visual Studio Code, /Applications/Xcode.app',
+  'settings.updates': '업데이트',
+  'settings.updates.auto': '실행할 때 업데이트 확인',
+  'settings.updates.now': '지금 확인',
+  'settings.menuBar': '메뉴 막대',
+  'settings.menuBar.icon': '메뉴 막대에 아이콘 표시',
+  'settings.menuBar.keep': '창을 닫아도 메뉴 막대에서 계속 실행',
+  'settings.menuBar.needsIcon': '메뉴 막대 아이콘이 켜져 있어야 합니다',
+  'settings.fetch': '백그라운드 가져오기 (fetch)',
+  'settings.fetch.off': '끄기',
+  'settings.fetch.min': (p: Params) => `${n(p.n)}분마다`,
+  'settings.saveFail': (p: Params) => `설정을 저장할 수 없습니다: ${p.msg}`,
+  'settings.reportIssue': '문제 보고…',
+  'settings.gitMissing': 'git을 찾을 수 없습니다.',
+  'settings.openSettings': '설정 열기',
+  'settings.version': (p: Params) => `Lanes ${p.version}`,
+
+  // updates
+  'update.title': '업데이트',
+  'update.checking': '업데이트를 확인하는 중…',
+  'update.upToDate': (p: Params) => `최신 버전입니다${p.version ? ` (${p.version})` : ''}`,
+  'update.available': (p: Params) => `새 버전 ${p.version}을(를) 사용할 수 있습니다`,
+  'update.current': (p: Params) => `현재 버전 ${p.version}`,
+  'update.notes': '변경 내용',
+  'update.noNotes': '릴리스 노트가 없습니다',
+  'update.install': '설치하고 다시 시작',
+  'update.later': '나중에',
+  'update.close': '닫기',
+  'update.installing': '업데이트를 설치하는 중…',
+  'update.downloading': (p: Params) => `다운로드 중… ${p.done}${p.total ? ` / ${p.total}` : ''}`,
+  'update.restarting': '다시 시작하는 중…',
+  'update.offline': '업데이트 서버에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요.',
+  'update.failed': '업데이트에 실패했습니다.',
+  'update.retry': '다시 시도',
+
+  // report issue
+  'report.menu': '문제 보고…',
+  'report.openFail': (p: Params) => `브라우저를 열 수 없습니다: ${p.msg}`,
+
+  // line history (history window)
+  'history.showForSelection': '선택 영역의 히스토리 보기',
+  'history.selectLinesFirst': '먼저 줄을 선택하세요',
+  'history.lineHeader': (p: Params) => `${p.path} · ${p.range}번째 줄`,
+  'history.range': (p: Params) => (p.start === p.end ? `${n(p.start)}` : `${n(p.start)}–${n(p.end)}`),
+  'history.selection': (p: Params) => `${p.range}번째 줄 선택됨`,
+  'history.back': '파일 히스토리로 돌아가기',
+  'history.noEntries': '선택한 줄의 커밋이 없습니다',
+  'history.truncated': '결과가 너무 많아 일부만 표시합니다',
+  'history.pickLineNumber': '줄 번호를 클릭하고 Shift+클릭으로 범위를 선택하세요',
+  'history.loading': '선택 영역의 히스토리를 불러오는 중…',
+  'history.hunkCount': (p: Params) => `${n(p.n)}개 변경 구간`,
 } satisfies Record<string, Entry>;

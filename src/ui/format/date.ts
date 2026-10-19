@@ -1,4 +1,5 @@
 import { locale, t } from '../../i18n';
+import { getSettings } from '../app/settingsStore';
 
 let timeFmt: Intl.DateTimeFormat | null = null;
 let timeFmtLocale = '';
@@ -23,11 +24,18 @@ const hm = (d: Date) => `${p2(d.getHours())}:${p2(d.getMinutes())}`;
  */
 export function formatCommitDate(ts: number, now: Date = new Date()): string {
   const d = new Date(ts * 1000);
+  if (getSettings().dateFormat === 'absolute') return formatAbsoluteDate(ts);
   if (sameDay(d, now)) return t('date.today', { time: hm(d) });
   const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
   if (sameDay(d, y)) return t('date.yesterday', { time: hm(d) });
   const md = t('date.monthDay', { month: d.getMonth() + 1, day: d.getDate() });
   return d.getFullYear() === now.getFullYear() ? md : t('date.yearMonthDay', { year: d.getFullYear(), md });
+}
+
+/** Absolute mode (settings.dateFormat = 'absolute'), locale independent: "2026-10-03 17:23". */
+export function formatAbsoluteDate(ts: number): string {
+  const d = new Date(ts * 1000);
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${hm(d)}`;
 }
 
 /** Full date for tooltips / details: ko "2026. 10. 3. 오후 5:23", en "Oct 3, 2026, 5:23 PM". */

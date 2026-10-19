@@ -1,7 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import './assets/fonts/fonts.css';
-import { initI18n } from './i18n';
+import { initI18n, LangRoot } from './i18n';
 
 // The same bundle serves the main window, the separate diff window (index.html?diffSession=<id>)
 // the file history window (index.html?historySession=<id>) and the menu bar quick-commit popover (?quickCommit=1).
@@ -18,7 +18,10 @@ const isQuickCommit = query.has('quickCommit');
 void initI18n().then(() => {
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>
-      <Suspense fallback={null}>{isDiffWindow ? <DiffWindowApp /> : isHistoryWindow ? <HistoryWindowApp /> : isQuickCommit ? <QuickCommitApp /> : <App />}</Suspense>
+      {/* Remounts on language / date-format change so every t() call re-renders. */}
+      <LangRoot>
+        <Suspense fallback={null}>{isDiffWindow ? <DiffWindowApp /> : isHistoryWindow ? <HistoryWindowApp /> : isQuickCommit ? <QuickCommitApp /> : <App />}</Suspense>
+      </LangRoot>
     </React.StrictMode>,
   );
 });

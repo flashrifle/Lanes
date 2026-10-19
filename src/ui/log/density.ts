@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { getSettings, saveSettings, useSettings } from '../app/settingsStore';
 import { t } from '../../i18n';
 
 export type Density = 'comfortable' | 'compact';
@@ -21,33 +21,15 @@ export const DENSITIES: Record<Density, GraphMetrics> = {
 };
 
 export const densityLabel = (d: Density): string => t(d === 'compact' ? 'density.compact' : 'density.comfortable');
-const KEY = 'lanes.density';
 
-function load(): Density {
-  try {
-    const v = localStorage.getItem(KEY);
-    if (v === 'compact' || v === 'comfortable') return v;
-  } catch { /* storage unavailable */ }
-  return 'comfortable';
-}
-
-let current: Density = load();
-const listeners = new Set<() => void>();
-
+// Backed by AppSettings.density (src/ui/app/settingsStore.ts); every window follows `settings-changed`.
 export function setDensity(d: Density): void {
-  if (d === current) return;
-  current = d;
-  try { localStorage.setItem(KEY, d); } catch { /* ignore */ }
-  listeners.forEach((l) => l());
+  if (d === getSettings().density) return;
+  void saveSettings({ density: d }).catch(() => { /* reverted by the store */ });
 }
-
-const subscribe = (l: () => void): (() => void) => {
-  listeners.add(l);
-  return () => { listeners.delete(l); };
-};
 
 export function useDensity(): Density {
-  return useSyncExternalStore(subscribe, () => current);
+  return useSettings().density;
 }
 
 export const useMetrics = (): GraphMetrics => DENSITIES[useDensity()];

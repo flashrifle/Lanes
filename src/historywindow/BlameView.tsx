@@ -3,11 +3,12 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { call, toAppError } from '../api';
 import { displayCols } from '../diffwindow/align';
-import type { BlameCommit, BlameLine, BlameResult } from '../types';
+import type { BlameCommit, BlameLine, BlameResult, LineRange } from '../types';
 import { Tooltip } from '../ui/common/Tooltip';
 import { formatCommitDate, formatFullDate } from '../ui/format/date';
 import { colorOf } from '../ui/log/palette';
 import { ageBuckets, buildBlameRuns, hashColorIndex, shortAuthor } from './blame';
+import { clickLine, inRange, rangeFromDomSelection, rangeOf, type LineSel } from './lineSelection';
 import { t } from '../i18n';
 
 const ROW_H = 20;
@@ -29,6 +30,10 @@ interface Props {
   selectedHash: string | null;
   onPick: (line: BlameLine, commit: BlameCommit | undefined) => void;
   onContext: (e: ReactMouseEvent, line: BlameLine, commit: BlameCommit | undefined) => void;
+  /** Right-click on a line number / code: the selected range (or the clicked line). */
+  onLineMenu?: (e: ReactMouseEvent, range: LineRange, target: BlameTarget) => void;
+  /** "Show History for Selection". */
+  onLineHistory?: (range: LineRange, target: BlameTarget) => void;
 }
 
 function tipOf(c: BlameCommit | undefined, hash: string): string {
@@ -36,7 +41,7 @@ function tipOf(c: BlameCommit | undefined, hash: string): string {
   return `${c.subject}\n${c.authorName} <${c.authorEmail}>\n${formatFullDate(c.authorTime)}\n${c.hash}${c.boundary ? ` · ${t('hw.boundary')}` : ''}\n${t('hw.gutterHint')}`;
 }
 
-export function BlameView({ repoPath, target, selectedHash, onPick, onContext }: Props) {
+export function BlameView({ repoPath, target, selectedHash, onPick, onContext, onLineMenu, onLineHistory }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const key = `${repoPath}\0${target.rev}\0${target.path}`;
 
@@ -68,6 +73,8 @@ export function BlameView({ repoPath, target, selectedHash, onPick, onContext }:
       selectedHash={selectedHash}
       onPick={onPick}
       onContext={onContext}
+      onLineMenu={onLineMenu ? (e, r) => onLineMenu(e, r, target) : undefined}
+      onLineHistory={onLineHistory ? (r) => onLineHistory(r, target) : undefined}
     />
   );
 }
@@ -78,9 +85,11 @@ interface BodyProps {
   selectedHash: string | null;
   onPick: Props['onPick'];
   onContext: Props['onContext'];
+  onLineMenu?: (e: ReactMouseEvent, range: LineRange) => void;
+  onLineHistory?: (range: LineRange) => void;
 }
 
-function BlameBody({ data, focusLine, selectedHash, onPick, onContext }: BodyProps) {
+function BlameBody({ data, focusLine, selectedHash, onPick, onContext, onLineMenu, onLineHistory }: BodyProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lines = data.lines;
   const runs = useMemo(() => buildBlameRuns(lines), [lines]);
@@ -97,6 +106,17 @@ function BlameBody({ data, focusLine, selectedHash, onPick, onContext }: BodyPro
   }, [lines]);
   const digits = Math.max(3, String(lines.length).length);
   const [mark, setMark] = useState<number | null>(focusLine);
+  const [lineSel, setLineSel] = useState<LineSel | null>(null);
+  const selRange = lineSel ? rangeOf(lineSel) : null;
+
+  /** Native text selection wins, then the line-number selection, then the clicked line. */
+  const rangeForMenu = (line: number): LineRange => {
+    const root = scrollRef.current;
+    const dom = root ? rangeFromDomSelection(root) : null;
+    if (dom) return dom;
+    if (selRange && inRange(selRange, line)) return selRange;
+    return { start: line, end: line };
+  };
 
   const virt = useVirtualizer({
     count: lines.length,
@@ -151,7 +171,8 @@ function BlameBody({ data, focusLine, selectedHash, onPick, onContext }: BodyPro
             return (
               <div
                 key={vi.key}
-                className={'hw-bl-row' + (sel ? ' sel' : '') + (mark === i + 1 ? ' mark' : '') + (start ? ' rs' : '') + (end ? ' re' : '')}
+                data-line={i + 1}
+                className={'hw-bl-row' + (sel ? ' sel' : '') + (mark === i + 1 ? ' mark' : '') + (selRange && inRange(selRange, i + 1) ? ' lsel' : '') + (start ? ' rs' : '') + (end ? ' re' : '')}
                 style={{ transform: `translateY(${vi.start}px)` }}
               >
                 <Tooltip label={tipOf(c, l.hash)} side="right">
@@ -164,13 +185,28 @@ function BlameBody({ data, focusLine, selectedHash, onPick, onContext }: BodyPro
                     {gutter}
                   </div>
                 </Tooltip>
-                <div className="hw-bl-ln">{i + 1}</div>
-                <div className="hw-bl-code">{l.text}</div>
+                <div
+                  className="hw-bl-ln"
+                  onClick={(e) => setLineSel((p) => clickLine(p, i + 1, e.shiftKey))}
+                  onContextMenu={onLineMenu ? (e) => onLineMenu(e, rangeForMenu(i + 1)) : undefined}
+                >{i + 1}</div>
+                <div
+                  className="hw-bl-code"
+                  onContextMenu={onLineMenu ? (e) => onLineMenu(e, rangeForMenu(i + 1)) : undefined}
+                >{l.text}</div>
               </div>
             );
           })}
         </div>
       </div>
+      {selRange && (
+        <div className="hw-selbar">
+          <span>{t('history.selection', { range: t('history.range', { start: selRange.start, end: selRange.end }) })}</span>
+          <span className="grow" />
+          {onLineHistory && <button className="btn small primary" onClick={() => onLineHistory(selRange)}>{t('history.showForSelection')}</button>}
+          <button className="btn small" onClick={() => setLineSel(null)} aria-label="×">×</button>
+        </div>
+      )}
     </div>
   );
 }

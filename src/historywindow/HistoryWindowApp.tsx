@@ -8,7 +8,7 @@ import '../diffwindow/diff.css';
 import './history.css';
 import { call, toAppError } from '../api';
 import type { DiffViewerHandle } from '../diffwindow/DiffViewer';
-import type { BlameCommit, BlameLine, FileHistory, FileHistoryEntry } from '../types';
+import type { BlameCommit, BlameLine, FileHistory, FileHistoryEntry, LineRange } from '../types';
 import { ContextMenu, useContextMenu, type MenuItem } from '../ui/common/ContextMenu';
 import { Icon } from '../ui/common/Icons';
 import { Tooltip, TooltipHost } from '../ui/common/Tooltip';
@@ -21,6 +21,7 @@ import { BlameView, type BlameTarget } from './BlameView';
 import { filterEntries, findEntry, previousNames } from './entries';
 import { HistoryDiff } from './HistoryDiff';
 import { HistoryList } from './HistoryList';
+import { LineHistoryView, type LineMode } from './LineHistoryView';
 import {
   basename,
   EVENT_HISTORY_SESSION_UPDATE,
@@ -30,7 +31,7 @@ import {
   type HistorySession,
   type HistorySessionUpdateEvent,
 } from './session';
-import { t } from '../i18n';
+import { LangRoot, t } from '../i18n';
 
 type Mode = 'diff' | 'blame';
 const PREFS_KEY = 'hw-prefs';
@@ -58,6 +59,14 @@ function initialSessionId(): string | null {
 let toastNonce = 1;
 
 export default function HistoryWindowApp() {
+  return (
+    <LangRoot>
+      <HistoryWindowInner />
+    </LangRoot>
+  );
+}
+
+function HistoryWindowInner() {
   const [session, setSession] = useState<HistorySession | null>(() => {
     const id = initialSessionId();
     return id ? loadHistorySession(id) : null;
@@ -71,6 +80,7 @@ export default function HistoryWindowApp() {
   const [revealToken, setRevealToken] = useState(0);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [changeCount, setChangeCount] = useState<number | null>(null);
+  const [lineMode, setLineMode] = useState<LineMode | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const viewer = useRef<DiffViewerHandle>(null);
   const filterRef = useRef<HTMLInputElement>(null);
@@ -104,6 +114,7 @@ export default function HistoryWindowApp() {
     setFilter('');
     setOverride(null);
     setFocusLine(null);
+    setLineMode(session.lineRange ? { path: session.path, rev: session.rev, range: session.lineRange } : null);
     let cancelled = false;
     call('get_file_history', { repoPath: session.repoPath, path: session.path, rev: session.rev })
       .then((h) => {
@@ -198,6 +209,35 @@ export default function HistoryWindowApp() {
     [entries, pickCommit, blamePrevious, showToast],
   );
 
+  const showLineHistory = useCallback((range: LineRange, path: string, rev: string | null) => {
+    setLineMode({ path, rev, range });
+  }, []);
+
+  const onBlameLineMenu = useCallback(
+    (ev: ReactMouseEvent, range: LineRange, target: BlameTarget) => {
+      ev.preventDefault();
+      ctx.open(ev, [{ label: t('history.showForSelection'), onClick: () => showLineHistory(range, target.path, target.rev) }]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showLineHistory],
+  );
+
+  const onDiffLineMenu = useCallback(
+    (ev: ReactMouseEvent, range: LineRange | null) => {
+      if (!selected) return;
+      ev.preventDefault();
+      ctx.open(ev, [
+        {
+          label: t('history.showForSelection'),
+          disabled: !range || selected.status === 'deleted',
+          onClick: () => { if (range) showLineHistory(range, selected.path, selected.hash); },
+        },
+      ]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selected, showLineHistory],
+  );
+
   const closeWindow = useCallback(() => {
     getCurrentWindow().close().catch(() => window.close());
   }, []);
@@ -209,6 +249,7 @@ export default function HistoryWindowApp() {
       if (e.key === 'Escape') {
         e.preventDefault();
         if (document.activeElement === filterRef.current && filter) { setFilter(''); return; }
+        if (lineMode) { setLineMode(null); return; }
         closeWindow();
         return;
       }
@@ -218,7 +259,7 @@ export default function HistoryWindowApp() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeWindow, ctx.menu, filter, prefs.mode]);
+  }, [closeWindow, ctx.menu, filter, prefs.mode, lineMode]);
 
   if (!session) {
     return (
@@ -246,6 +287,8 @@ export default function HistoryWindowApp() {
           selectedHash={override ? null : selectedHash}
           onPick={(l) => { pickCommit(l.hash, l.origLine); }}
           onContext={onBlameContext}
+          onLineMenu={onBlameLineMenu}
+          onLineHistory={(r, tgt) => showLineHistory(r, tgt.path, tgt.rev)}
         />
       );
     } else if (selected?.status === 'deleted') {
@@ -259,7 +302,7 @@ export default function HistoryWindowApp() {
       );
     } else right = <div className="dw-placeholder">{t('hw.selectCommit')}</div>;
   } else if (selected) {
-    right = <HistoryDiff ref={viewer} repoPath={session.repoPath} entry={selected} collapse={prefs.collapse} onChangeCount={setChangeCount} />;
+    right = <HistoryDiff ref={viewer} repoPath={session.repoPath} entry={selected} collapse={prefs.collapse} onChangeCount={setChangeCount} onLineMenu={onDiffLineMenu} />;
   } else right = <div className="dw-placeholder">{entries.length === 0 ? t('hw.noHistory') : t('hw.selectCommit')}</div>;
 
   const atPath = selected && selected.path !== session.path ? selected.path : null;
@@ -325,7 +368,12 @@ export default function HistoryWindowApp() {
         </div>
       </div>
 
-      <div className="hw-main">
+      {lineMode && (
+        <div className="hw-main">
+          <LineHistoryView repoPath={session.repoPath} mode={lineMode} onBack={() => setLineMode(null)} />
+        </div>
+      )}
+      <div className="hw-main" hidden={!!lineMode}>
         <SplitPane dir="h" fixed="start" defaultSize={380} min={240} storageKey="history-list">
           <div className="hw-left">
             <div className="pane-header">

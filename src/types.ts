@@ -756,6 +756,10 @@ export interface CommandMap {
   open_quick_commit: [{ repoPath: string }, null];
   /** Regular activation policy + show/focus main; non-null repoPath also emits open-repo-request. */
   show_main_window: [{ repoPath: string | null }, null];
+  /** Repo the quick-commit window was last targeted at (covers a quick-commit-target event fired before the UI listened). */
+  get_quick_commit_target: [Record<string, never>, string | null];
+  /** Quick-commit UI reports an op in flight; while true the window does not hide on blur. */
+  set_quick_commit_busy: [{ busy: boolean }, null];
 }
 export type CommandName = keyof CommandMap;
 

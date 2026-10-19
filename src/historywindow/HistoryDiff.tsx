@@ -1,9 +1,10 @@
 // Diff mode: side-by-side diff of the file in one history commit vs its first parent (reuses the diff window viewer).
-import { useEffect, useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type Ref } from 'react';
 import { call, toAppError } from '../api';
 import { buildDiffModel, type DiffModel } from '../diffwindow/align';
 import { DiffViewer, type DiffViewerHandle } from '../diffwindow/DiffViewer';
-import type { DiffRequest, FileDiff, FileHistoryEntry } from '../types';
+import type { DiffRequest, FileDiff, FileHistoryEntry, LineRange } from '../types';
+import { diffLineOfTarget, diffRangeFromSelection } from './lineSelection';
 import { t } from '../i18n';
 
 const FULL_CONTEXT = 1_000_000;
@@ -38,9 +39,11 @@ interface Props {
   collapse: boolean;
   ref?: Ref<DiffViewerHandle>;
   onChangeCount?: (n: number | null) => void;
+  /** Right-click in the diff: new-side line range of the native selection (or the clicked row), null if none. */
+  onLineMenu?: (e: ReactMouseEvent, range: LineRange | null) => void;
 }
 
-export function HistoryDiff({ repoPath, entry, collapse, ref, onChangeCount }: Props) {
+export function HistoryDiff({ repoPath, entry, collapse, ref, onChangeCount, onLineMenu }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const key = `${repoPath}:${entry.hash}:${entry.path}`;
 
@@ -112,7 +115,10 @@ export function HistoryDiff({ repoPath, entry, collapse, ref, onChangeCount }: P
       </div>
       {state.kind === 'ok' && state.data.partial && <div className="dw-banner">{t('dw.bannerBigFile')}</div>}
       {state.kind === 'ok' && state.data.diff.truncated && <div className="dw-banner">{t('dw.bannerBigDiff')}</div>}
-      <div className="dw-body">{body}</div>
+      <div
+        className="dw-body"
+        onContextMenu={onLineMenu ? (e) => onLineMenu(e, diffRangeFromSelection(e.currentTarget) ?? diffLineOfTarget(e.target)) : undefined}
+      >{body}</div>
     </div>
   );
 }
