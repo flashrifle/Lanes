@@ -25,6 +25,12 @@ pub struct Strings {
     pub no_remote: &'static str,
     pub auth_paused: &'static str,
     pub hidden_notice: (&'static str, &'static str),
+    pub to_push: &'static str,
+    pub to_pull: &'static str,
+    pub up_to_date: &'static str,
+    pub no_upstream: &'static str,
+    pub last_fetch: &'static str,
+    pub never_fetched: &'static str,
 }
 
 const KO: Strings = Strings {
@@ -47,6 +53,12 @@ const KO: Strings = Strings {
     no_remote: "리모트가 설정되어 있지 않습니다",
     auth_paused: "인증에 실패해 이 저장소의 백그라운드 페치를 일시 중지했습니다",
     hidden_notice: ("Lanes가 메뉴 막대에서 계속 실행 중입니다", "완전히 종료하려면 메뉴 막대 아이콘에서 'Lanes 종료'를 선택하세요."),
+    to_push: "보낼 커밋",
+    to_pull: "받을 커밋",
+    up_to_date: "최신 상태",
+    no_upstream: "업스트림 없음",
+    last_fetch: "마지막 페치",
+    never_fetched: "페치한 적 없음",
 };
 
 const EN: Strings = Strings {
@@ -69,6 +81,12 @@ const EN: Strings = Strings {
     no_remote: "No remote is configured",
     auth_paused: "Authentication failed; background fetch is paused for this repository",
     hidden_notice: ("Lanes is still running in the menu bar", "Choose 'Quit Lanes' from the menu bar icon to quit completely."),
+    to_push: "to push",
+    to_pull: "to pull",
+    up_to_date: "Up to date",
+    no_upstream: "No upstream",
+    last_fetch: "Last fetch",
+    never_fetched: "Never fetched",
 };
 
 pub fn strings(lang: Lang) -> &'static Strings {
@@ -151,13 +169,68 @@ pub enum GlobalAction {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Item {
-    Repo { index: usize, title: String, actions: Vec<(RepoAction, String)> },
+    /// `info`: disabled first row of the submenu (sync state + last fetch).
+    Repo { index: usize, title: String, info: Option<String>, actions: Vec<(RepoAction, String)> },
     Empty(String),
     Separator,
     Global(GlobalAction, String),
 }
 
-pub fn build_model(repos: &[RepoSummary], lang: Lang) -> Vec<Item> {
+/// "Pull ↓3" when there is something to pull (same for push), else the plain label.
+fn with_count(label: &str, arrow: char, n: Option<u32>) -> String {
+    match n.filter(|&n| n > 0) {
+        Some(n) => format!("{label}  {arrow}{n}"),
+        None => label.to_string(),
+    }
+}
+
+fn ago(lang: Lang, secs: i64) -> String {
+    let m = (secs.max(0) / 60) as u64;
+    match (lang, m) {
+        (Lang::Ko, 0) => "방금".into(),
+        (Lang::Ko, m) if m < 60 => format!("{m}분 전"),
+        (Lang::Ko, m) if m < 60 * 24 => format!("{}시간 전", m / 60),
+        (Lang::Ko, m) => format!("{}일 전", m / (60 * 24)),
+        (Lang::En, 0) => "just now".into(),
+        (Lang::En, m) if m < 60 => format!("{m} min ago"),
+        (Lang::En, m) if m < 60 * 24 => format!("{} h ago", m / 60),
+        (Lang::En, m) => format!("{} d ago", m / (60 * 24)),
+    }
+}
+
+/// "↑2 to push · ↓3 to pull · Last fetch 5 min ago" (behind counts are only as fresh as the last fetch).
+pub fn sync_info(s: &RepoSummary, lang: Lang, now: i64) -> Option<String> {
+    if s.error.is_some() {
+        return None;
+    }
+    let st = strings(lang);
+    let mut parts = Vec::new();
+    if s.upstream.is_none() {
+        parts.push(st.no_upstream.to_string());
+    } else {
+        let (a, b) = (s.ahead.unwrap_or(0), s.behind.unwrap_or(0));
+        if a > 0 { parts.push(format!("↑{a} {}", st.to_push)); }
+        if b > 0 { parts.push(format!("↓{b} {}", st.to_pull)); }
+        if a == 0 && b == 0 { parts.push(st.up_to_date.to_string()); }
+    }
+    parts.push(match s.last_fetch {
+        Some(t) => format!("{} {}", st.last_fetch, ago(lang, now - t)),
+        None => st.never_fetched.to_string(),
+    });
+    Some(parts.join(" · "))
+}
+
+/// Text next to the tray icon: totals over all listed repos, e.g. "↑2 ↓5"; None when nothing to sync.
+pub fn tray_title(repos: &[RepoSummary]) -> Option<String> {
+    let a: u32 = repos.iter().filter_map(|s| s.ahead).sum();
+    let b: u32 = repos.iter().filter_map(|s| s.behind).sum();
+    let mut parts = Vec::new();
+    if a > 0 { parts.push(format!("↑{a}")); }
+    if b > 0 { parts.push(format!("↓{b}")); }
+    (!parts.is_empty()).then(|| parts.join(" "))
+}
+
+pub fn build_model(repos: &[RepoSummary], lang: Lang, now: i64) -> Vec<Item> {
     let st = strings(lang);
     let mut items = Vec::new();
     if repos.is_empty() {
@@ -167,9 +240,10 @@ pub fn build_model(repos: &[RepoSummary], lang: Lang) -> Vec<Item> {
         items.push(Item::Repo {
             index: i,
             title: t,
+            info: sync_info(&repos[i], lang, now),
             actions: vec![
-                (RepoAction::Pull, st.pull.to_string()),
-                (RepoAction::Push, st.push.to_string()),
+                (RepoAction::Pull, with_count(st.pull, '↓', repos[i].behind)),
+                (RepoAction::Push, with_count(st.push, '↑', repos[i].ahead)),
                 (RepoAction::Fetch, st.fetch.to_string()),
                 (RepoAction::QuickCommit, st.quick_commit.to_string()),
                 (RepoAction::OpenInLanes, st.open_in_lanes.to_string()),
@@ -288,12 +362,12 @@ mod tests {
     #[test]
     fn model_layout_and_strings() {
         let v = vec![s("/w/app", "app", true)];
-        let m = build_model(&v, Lang::Ko);
+        let m = build_model(&v, Lang::Ko, 0);
         assert!(matches!(&m[0], Item::Repo { actions, .. } if actions.len() == 5 && actions[0].1 == "풀"));
         assert_eq!(m[1], Item::Separator);
         assert!(matches!(&m[2], Item::Global(GlobalAction::OpenLanes, t) if t == "Lanes 열기"));
         assert!(matches!(m.last().unwrap(), Item::Global(GlobalAction::Quit, _)));
-        let e = build_model(&[], Lang::En);
+        let e = build_model(&[], Lang::En, 0);
         assert_eq!(e[0], Item::Empty("No repositories open".into()));
         assert_eq!(strings(Lang::En).non_ff_hint, "Open Lanes to choose rebase/merge");
     }
@@ -307,5 +381,26 @@ mod tests {
         for g in [GlobalAction::OpenLanes, GlobalAction::Settings, GlobalAction::CheckUpdates, GlobalAction::Quit] {
             assert_eq!(parse_global_item_id(global_item_id(g)), Some(g));
         }
+    }
+
+    #[test]
+    fn sync_counts_and_tray_title() {
+        let mut a = s("/x/app", "app", true);
+        a.upstream = Some("refs/remotes/origin/main".into());
+        a.ahead = Some(2);
+        a.behind = Some(3);
+        a.last_fetch = Some(1000);
+        assert_eq!(sync_info(&a, Lang::Ko, 1000 + 300).as_deref(), Some("↑2 보낼 커밋 · ↓3 받을 커밋 · 마지막 페치 5분 전"));
+        let m = build_model(std::slice::from_ref(&a), Lang::En, 0);
+        assert!(matches!(&m[0], Item::Repo { actions, .. } if actions[0].1 == "Pull  ↓3" && actions[1].1 == "Push  ↑2"));
+        let mut b = s("/x/lib", "lib", true);
+        b.upstream = Some("refs/remotes/origin/main".into());
+        b.ahead = Some(0);
+        b.behind = Some(0);
+        assert_eq!(sync_info(&b, Lang::En, 0).as_deref(), Some("Up to date · Never fetched"));
+        assert_eq!(tray_title(&[a.clone(), b.clone()]).as_deref(), Some("↑2 ↓3"));
+        assert_eq!(tray_title(&[b]), None);
+        a.upstream = None;
+        assert!(sync_info(&a, Lang::En, 0).unwrap().starts_with("No upstream"));
     }
 }

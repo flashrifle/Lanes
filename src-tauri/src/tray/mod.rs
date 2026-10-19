@@ -57,8 +57,11 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, items: &[Item]) -> tauri::Result<M
     let mut mb = MenuBuilder::new(app);
     for item in items {
         match item {
-            Item::Repo { index, title, actions } => {
+            Item::Repo { index, title, info, actions } => {
                 let mut sb = SubmenuBuilder::new(app, title);
+                if let Some(info) = info {
+                    sb = sb.item(&MenuItemBuilder::new(info).enabled(false).build(app)?).separator();
+                }
                 for (a, label) in actions {
                     sb = sb.text(model::repo_item_id(*index, *a), label);
                 }
@@ -72,12 +75,18 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>, items: &[Item]) -> tauri::Result<M
     mb.build()
 }
 
+fn unix_now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+}
+
 fn rebuild_menu<R: Runtime>(app: &AppHandle<R>, repos: &[RepoSummary]) {
     let Some(tray) = app.tray_by_id(TRAY_ID) else { return };
-    let items = model::build_model(repos, lang_of(app));
+    let items = model::build_model(repos, lang_of(app), unix_now());
     if let Ok(menu) = build_menu(app, &items) {
         let _ = tray.set_menu(Some(menu));
     }
+    // Totals next to the icon so pending pulls/pushes are visible without opening the menu.
+    let _ = tray.set_title(model::tray_title(repos).as_deref());
 }
 
 fn refresh<R: Runtime>(app: &AppHandle<R>) {
@@ -90,7 +99,7 @@ fn refresh<R: Runtime>(app: &AppHandle<R>) {
 
 fn make_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<TrayIcon<R>> {
     let icon = Image::from_bytes(include_bytes!("../../icons/tray-template@2x.png"))?;
-    let items = model::build_model(&[], lang_of(app));
+    let items = model::build_model(&[], lang_of(app), unix_now());
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .icon_as_template(true)
