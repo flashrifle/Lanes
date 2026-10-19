@@ -7,7 +7,7 @@ import type {
 } from '../../types';
 import { Store } from '../state/createStore';
 import type { RepoStore } from '../state/repoStore';
-import { compareToRevRange, currentRev, explainErrorKey, headCtxOf, pickOrder, revertOrder, shortHash } from './logic';
+import { canUndoCommit, compareToRevRange, currentRev, explainErrorKey, headCtxOf, headIsPushed, pickOrder, revertOrder, shortHash } from './logic';
 
 export type OpsDialog =
   | { kind: 'none' }
@@ -97,6 +97,56 @@ export class OpsStore extends Store<OpsState> {
       },
     });
   };
+
+  // ───────────── undo commit ─────────────
+  /** "Undo Commit…" is possible for `hashes` (see canUndoCommit; the working-tree operation counts too). */
+  canUndo = (hashes: readonly string[]): boolean => {
+    const snap = this.repo.getState().snapshot;
+    const head = headCtxOf(snap?.refs);
+    const op = this.repo.commit.getState().status?.operation?.operation ?? null;
+    const idx = snap?.headIndex ?? null;
+    const parentCount = snap && idx != null && idx >= 0 ? snap.parents[idx]?.length ?? null : null;
+    return canUndoCommit(op && !head.operation ? { ...head, operation: op } : head, hashes, parentCount);
+  };
+
+  /**
+   * Confirm, then soft-reset the branch to HEAD's first parent: the commit's changes stay staged, nothing in the
+   * work tree is touched. The commit message goes back into the draft (unless one is being written).
+   */
+  askUndoCommit = async (hash: string): Promise<void> => {
+    if (!this.canUndo([hash])) return;
+    let d;
+    try { d = await call('get_commit_details', { repoPath: this.repo.path, hash }); }
+    catch (e) { this.repo.showError(e); return; }
+    if (!this.canUndo([hash]) || d.parents.length === 0) return; // HEAD moved meanwhile
+    const branch = headCtxOf(this.repo.getState().snapshot?.refs).branch ?? 'HEAD';
+    const pushed = headIsPushed(this.repo.commit.getState().status);
+    const merge = d.parents.length > 1;
+    const warning = [merge ? t('undo.merge') : null, pushed ? t('undo.pushed') : null].filter(Boolean).join('\n');
+    const message = d.body ? `${d.subject}\n\n${d.body}` : d.subject;
+    const parent = d.parents[0];
+    this.repo.openDialog({
+      kind: 'confirm',
+      title: t('undo.title'),
+      message: t('undo.msg', { subject: d.subject, hash: shortHash(hash), branch }),
+      warning: warning || undefined,
+      confirmLabel: t('undo.confirm'),
+      // Already pushed = history rewrite: make Enter land on Cancel.
+      noAutoFocus: pushed,
+      onConfirm: () => {
+        this.repo.closeDialog();
+        void this.undoCommit(parent, message);
+      },
+    });
+  };
+
+  private async undoCommit(parent: string, message: string): Promise<void> {
+    const o = await this.repo.runOp(t('undo.running'), (repoPath) =>
+      call('reset', { repoPath, request: { hash: parent, mode: 'soft', discardLocalChanges: false } }));
+    if (!o.ok) { this.fail(o); return; }
+    if (!this.repo.commit.restoreDraft(message)) this.repo.showToast('info', t('undo.draftKept'));
+    this.repo.selectWorking();
+  }
 
   // ───────────── reset / tags ─────────────
   reset = async (request: ResetRequest): Promise<AppError | null> => {

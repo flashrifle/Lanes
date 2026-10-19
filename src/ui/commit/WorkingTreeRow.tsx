@@ -12,6 +12,7 @@ export function WorkingTreeRow({ height }: { height: number }) {
   const status = useStoreState(store.commit, (s) => s.status);
   const selected = useRepo((s) => s.workingSelected);
   const ctx = useContextMenu();
+  const headHash = useRepo((s) => s.snapshot?.refs.head.hash ?? null);
   const c = workingCounts(status);
   if (c.total === 0) return null;
   const hints: string[] = [];
@@ -30,6 +31,8 @@ export function WorkingTreeRow({ height }: { height: number }) {
         ctx.open(e, [
           { label: t('stash.saveMenu'), onClick: () => store.commit.openStashSave(null) },
           { label: t('commit.refresh'), onClick: () => void store.commit.refreshStatus() },
+          { separator: true },
+          { label: t('undo.menuLast'), disabled: !headHash || !store.ops.canUndo([headHash]), onClick: () => { if (headHash) void store.ops.askUndoCommit(headHash); } },
         ]);
       }}
     >

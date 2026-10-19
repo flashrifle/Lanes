@@ -16,6 +16,9 @@ const CommitIcon = () => (
 const ReflogIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.6h2.6M8 5v3.2l2.2 1.4" /></svg>
 );
+const UndoIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5.5 3.5L2.5 6.5l3 3M2.5 6.5h7a4 4 0 0 1 0 8H7" /></svg>
+);
 const StashIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 6.5h11v6.5h-11zM3.5 3.5h9l1 3h-11z" /><path d="M6.5 9.2h3" strokeLinecap="round" /></svg>
 );
@@ -35,6 +38,9 @@ export function RepoActions() {
   const pulling = running.includes('pull');
   const pushing = running.includes('push');
   const pushOpen = useStoreState(store.ops, (s) => s.dialog.kind === 'push');
+  const headHash = head?.hash ?? null;
+  // canUndo reads snapshot + status, both of which re-render this component when they change.
+  const canUndo = !!headHash && store.ops.canUndo([headHash]);
 
   return (
     <div className="repo-actions">
@@ -62,6 +68,11 @@ export function RepoActions() {
       <Tooltip side="bottom" label={t('actions.stashTip')}>
         <button className="ra-btn" disabled={changed === 0} onClick={() => store.commit.openStashSave()}>
           <StashIcon /><span className="ra-label">{t('actions.stash')}</span>
+        </button>
+      </Tooltip>
+      <Tooltip side="bottom" label={t('undo.tip')}>
+        <button className="ra-btn" disabled={!headHash || !canUndo} onClick={() => { if (headHash) void store.ops.askUndoCommit(headHash); }}>
+          <UndoIcon /><span className="ra-label">{t('undo.short')}</span>
         </button>
       </Tooltip>
       <Tooltip side="bottom" label={t('reflog.menu')}>

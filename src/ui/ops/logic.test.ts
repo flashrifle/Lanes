@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PushPreview, Ref } from '../../types';
 import {
-  branchMenuState, buildPushRequest, canForce, canPush, commitMenuState, compareToRevRange, explainErrorKey, headCtxOf,
+  branchMenuState, buildPushRequest, canUndoCommit, headIsPushed, canForce, canPush, commitMenuState, compareToRevRange, explainErrorKey, headCtxOf,
   highlightKeyFor, initPushForm, needsMainline, pickOrder, pushFailureOf, resetConfirmWord, resetReady, revertOrder,
   swapRevRange, type HeadCtx,
 } from './logic';
@@ -129,3 +129,28 @@ describe('push dialog state', () => {
     expect(pushFailureOf({ code: 'authFailed', message: '', stderr: null })).toBe('other');
   });
 });
+
+describe('Undo Commit enablement', () => {
+  it('only for exactly one commit that is HEAD on a branch, with a parent and no operation', () => {
+    expect(canUndoCommit(head(), ['h0'], 1)).toBe(true);
+    expect(canUndoCommit(head(), ['h0'], 2)).toBe(true); // merge: allowed (first parent)
+    expect(canUndoCommit(head(), ['h1'], 1)).toBe(false); // not HEAD
+    expect(canUndoCommit(head(), ['h0', 'h1'], 1)).toBe(false); // multi-select
+    expect(canUndoCommit(head(), [], 1)).toBe(false);
+    expect(canUndoCommit(head(), ['h0'], 0)).toBe(false); // root commit
+    expect(canUndoCommit(head(), ['h0'], null)).toBe(false); // unknown parents
+    expect(canUndoCommit(head({ detached: true, branch: null }), ['h0'], 1)).toBe(false);
+    expect(canUndoCommit(head({ unborn: true }), ['h0'], 1)).toBe(false);
+    expect(canUndoCommit(head({ operation: 'rebase' }), ['h0'], 1)).toBe(false);
+    expect(canUndoCommit(head({ operation: 'merge' }), ['h0'], 1)).toBe(false);
+  });
+
+  it('pushed detection from upstream / ahead', () => {
+    expect(headIsPushed({ upstream: 'refs/remotes/origin/main', ahead: 0 })).toBe(true);
+    expect(headIsPushed({ upstream: 'refs/remotes/origin/main', ahead: 2 })).toBe(false);
+    expect(headIsPushed({ upstream: 'refs/remotes/origin/main', ahead: null })).toBe(true); // unknown → warn
+    expect(headIsPushed({ upstream: null, ahead: null })).toBe(false);
+    expect(headIsPushed(null)).toBe(false);
+  });
+});
+

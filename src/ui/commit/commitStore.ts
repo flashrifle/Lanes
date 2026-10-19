@@ -98,7 +98,8 @@ export class CommitStore extends Store<CommitState> {
           const status = await call('get_status', { repoPath: this.repo.path });
           this.set({ status, statusError: null });
           // Clean tree while its row is selected: the row disappears, fall back to the HEAD commit.
-          if (status.files.length === 0 && !this.disposed) this.repo.leaveWorking?.();
+          // Only on the last pass of a burst: an older pass may predate the op that dirtied the tree.
+          if (status.files.length === 0 && !this.again && !this.disposed) this.repo.leaveWorking?.();
         } catch (e) {
           this.set({ statusError: toAppError(e) });
         }
@@ -207,6 +208,14 @@ export class CommitStore extends Store<CommitState> {
 
   // ───────────── commit message ─────────────
   setMessage = (message: string): void => { this.set({ message }); };
+  /** Put `message` in the draft unless the user already typed one. Returns whether it was restored. */
+  restoreDraft = (message: string): boolean => {
+    if (this.state.message.trim() !== '') return false;
+    this.amendPrefill = null;
+    this.draftBeforeAmend = null;
+    this.set({ message, amend: false });
+    return true;
+  };
   setSignOff = (signOff: boolean): void => { this.set({ signOff }); };
 
   /** Amend on: prefill HEAD's message when the box is empty (IntelliJ). Off: restore the previous draft if untouched. */

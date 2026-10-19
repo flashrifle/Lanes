@@ -15,6 +15,7 @@ export function commitMenuItems({ store, hashes, focusHash }: { store: RepoStore
     { label: n > 1 ? t('ops.cherryPickN', { n }) : t('ops.cherryPick'), disabled: !s.cherryPick, onClick: () => void ops.startSequence('cherryPick', hashes) },
     { label: n > 1 ? t('ops.revertN', { n }) : t('ops.revert'), disabled: !s.revert, onClick: () => void ops.startSequence('revert', hashes) },
     { separator: true },
+    { label: t('undo.menu'), disabled: !ops.canUndo(hashes), onClick: () => void ops.askUndoCommit(focusHash) },
     { label: t('reset.menu'), disabled: !s.reset, onClick: () => ops.open({ kind: 'reset', hash: focusHash }) },
     { label: t('tag.menu'), disabled: !s.tag, onClick: () => ops.open({ kind: 'tag', hash: focusHash }) },
     { separator: true },
