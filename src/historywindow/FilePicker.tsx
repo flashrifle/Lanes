@@ -7,6 +7,7 @@ import { Store, useStoreState } from '../ui/state/createStore';
 import { rankFiles, type FuzzyMatch } from './fuzzy';
 import { openHistoryWindow } from './session';
 import { t } from '../i18n';
+import { useLayer } from '../ui/common/layers';
 
 interface PickerTarget { repoPath: string; repoName: string }
 interface PickerState { target: PickerTarget | null }
@@ -57,6 +58,7 @@ export function FilePickerHost() {
 }
 
 function FilePicker({ target }: { target: PickerTarget }) {
+  useLayer(() => filePicker.close(), { modal: true });
   const [files, setFiles] = useState<string[] | null>(() => fileCache.get(target.repoPath) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');

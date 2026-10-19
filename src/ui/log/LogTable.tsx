@@ -1,7 +1,8 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { CommitMeta, GraphRow, SignatureInfo } from '../../types';
-import { formatCommitDate, formatFullDate } from '../format/date';
+import { formatFullDate } from '../format/date';
+import { CommitDate } from '../format/CommitDate';
 import { ContextMenu, useContextMenu } from '../common/ContextMenu';
 import { Icon } from '../common/Icons';
 import { currentFocusRow } from '../state/logic';
@@ -69,7 +70,7 @@ const Row = memo(function Row({ row, top, rowH, graph, meta, labels, sig, select
       </div>
       <div className="cell author" title={meta ? `${meta.authorName} <${meta.authorEmail}>` : undefined}>{meta?.authorName}</div>
       <div className="cell date" title={meta ? formatFullDate(meta.authorTime) : undefined}>
-        {meta ? formatCommitDate(meta.authorTime) : ''}
+        {meta ? <CommitDate ts={meta.authorTime} /> : ''}
       </div>
       <div className="cell status">
         {sig && sig.status !== 'none' && (

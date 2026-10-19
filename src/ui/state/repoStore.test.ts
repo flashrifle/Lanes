@@ -85,3 +85,96 @@ describe('RepoStore reload races', () => {
     expect(b.getState().snapshot).not.toBeNull();
   });
 });
+
+describe('RepoStore write queue and dialogs', () => {
+  it('runOp and commit-store ops share one serialized queue', async () => {
+    const { RepoStore } = await import('./repoStore');
+    const s = new RepoStore(info, 1, async () => {});
+    const order: string[] = [];
+    let release!: () => void;
+    const a = s.runOp('checkout', async () => { order.push('checkout start'); await new Promise<void>((r) => { release = r; }); order.push('checkout end'); return { message: '' }; });
+    // CommitStore light op (stage) goes through the same queue
+    const b = s.commit.queue.run(async () => { order.push('stage'); });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(order).toEqual(['checkout start']);
+    expect(s.getState().opPending).toBe(2);
+    expect(s.commit.getState().pending).toBe(2);
+    release();
+    await Promise.all([a, b]);
+    expect(order).toEqual(['checkout start', 'checkout end', 'stage']);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(s.getState().opPending).toBe(0);
+    s.dispose();
+  });
+
+  it('a keyed op ignores a second call while the first is running', async () => {
+    const { RepoStore } = await import('./repoStore');
+    const s = new RepoStore(info, 1, async () => {});
+    let n = 0;
+    let release!: () => void;
+    const fn = async () => { n++; await new Promise<void>((r) => { release = r; }); return { message: 'ok' }; };
+    const p1 = s.runOp('fetch', fn, 'fetch');
+    expect(s.isRunning('fetch')).toBe(true);
+    const p2 = s.runOp('fetch', fn, 'fetch');
+    await expect(p2).resolves.toEqual({ ok: true });
+    await new Promise((r) => setTimeout(r, 0));
+    release();
+    await p1;
+    expect(n).toBe(1);
+    expect(s.isRunning('fetch')).toBe(false);
+    s.dispose();
+  });
+
+  it('a late dialog never replaces an open one; it is shown after the current one closes', async () => {
+    const { RepoStore } = await import('./repoStore');
+    const s = new RepoStore(info, 1);
+    const d1 = { kind: 'confirm' as const, title: 'one', message: '', confirmLabel: 'ok', onConfirm: () => {} };
+    const d2 = { ...d1, title: 'two' };
+    s.openDialog(d1);
+    s.openDialog(d2);
+    expect(s.getState().dialog).toBe(d1);
+    s.closeDialog();
+    expect(s.getState().dialog).toBe(d2);
+    s.closeDialog();
+    expect(s.getState().dialog).toBeNull();
+    s.dispose();
+  });
+
+  it('closeDialogIf closes only the same dialog', async () => {
+    const { RepoStore } = await import('./repoStore');
+    const s = new RepoStore(info, 1);
+    const d1 = { kind: 'createBranch' as const, startPoint: 'a', startLabel: 'a' };
+    const d2 = { kind: 'createBranch' as const, startPoint: 'b', startLabel: 'b' };
+    s.openDialog(d1);
+    s.closeDialog();
+    s.openDialog(d2);
+    s.closeDialogIf(d1); // late close of the first dialog
+    expect(s.getState().dialog).toBe(d2);
+    s.closeDialogIf(d2);
+    expect(s.getState().dialog).toBeNull();
+    s.dispose();
+  });
+
+  it('leaving the working row selects the HEAD commit', async () => {
+    const { RepoStore } = await import('./repoStore');
+    const s = new RepoStore(info, 1);
+    await s.reload();
+    s.selectWorking();
+    expect(s.getState().workingSelected).toBe(true);
+    s.leaveWorking();
+    expect(s.getState().workingSelected).toBe(false);
+    expect(s.getState().selection.focus).toBe(0); // headIndex of the fake snapshot
+    s.dispose();
+  });
+
+  it('the pull non-fast-forward dialog does not autofocus its primary button', async () => {
+    const { RepoStore } = await import('./repoStore');
+    const s = new RepoStore(info, 1, async () => {});
+    s.runOp = (async () => ({ ok: false, error: { code: 'nonFastForward', message: 'nff', stderr: null } })) as typeof s.runOp;
+    await s.pull('ffOnly');
+    const d = s.getState().dialog;
+    expect(d?.kind).toBe('confirm');
+    expect(d && d.kind === 'confirm' && d.noAutoFocus).toBe(true);
+    s.dispose();
+  });
+});

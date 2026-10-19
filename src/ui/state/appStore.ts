@@ -6,6 +6,7 @@ import {
 } from '../tabs/tabs';
 import { Store, useStoreState } from './createStore';
 import { RepoStore, type ToastState } from './repoStore';
+import { t } from '../../i18n';
 
 export interface TabEntry extends TabLike {
   name: string;
@@ -200,7 +201,32 @@ class AppStore extends Store<AppState> {
     void this.refreshRecents();
   };
 
-  closeActive = (): void => { if (this.state.activeId != null) this.closeTab(this.state.activeId); };
+  /** Whether closing this tab loses something: a draft commit message, or a write op queued / running. */
+  closeNeedsConfirm(store: RepoStore): 'draft' | 'busy' | null {
+    const cs = store.commit.getState();
+    if (store.getState().opPending > 0 || cs.committing) return 'busy';
+    if (cs.message.trim() !== '') return 'draft';
+    return null;
+  }
+
+  /** Close with a confirm when a draft message or a running op would be lost (⌘W, tab close button). */
+  requestCloseTab = (id: number): void => {
+    const tab = this.state.tabs.find((x) => x.id === id);
+    if (!tab) return;
+    const why = this.closeNeedsConfirm(tab.store);
+    if (!why) { this.closeTab(id); return; }
+    this.activate(id); // the confirm renders in the active tab's overlays
+    tab.store.openDialog({
+      kind: 'confirm',
+      danger: true,
+      title: t('tabs.closeConfirm.title', { name: tab.name }),
+      message: t(why === 'busy' ? 'tabs.closeConfirm.busy' : 'tabs.closeConfirm.draft'),
+      confirmLabel: t('tabs.closeConfirm.confirm'),
+      onConfirm: () => { tab.store.closeDialog(); this.closeTab(id); },
+    });
+  };
+
+  closeActive = (): void => { if (this.state.activeId != null) this.requestCloseTab(this.state.activeId); };
   reloadActive = (): void => { void this.activeStore()?.reload(); };
 }
 

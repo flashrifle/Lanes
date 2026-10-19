@@ -39,7 +39,13 @@ export function normalizeSettings(v: unknown): AppSettings {
 }
 
 let current: AppSettings = DEFAULT_SETTINGS;
+/** Last value the backend confirmed (load, save response, settings-changed). Failed saves revert to it. */
+let confirmed: AppSettings = DEFAULT_SETTINGS;
 let loaded = false;
+/** Fields with an optimistic value not confirmed yet → seq of the latest save that set them. */
+const pendingFields = new Map<keyof AppSettings, number>();
+let saveSeq = 0;
+let saveChain: Promise<unknown> = Promise.resolve();
 const listeners = new Set<() => void>();
 
 function publish(next: AppSettings): void {
@@ -47,6 +53,14 @@ function publish(next: AppSettings): void {
   current = next;
   loaded = true;
   listeners.forEach((l) => l());
+}
+
+/** Adopt a backend value, keeping fields that a queued / running save has not confirmed yet. */
+function adoptConfirmed(value: AppSettings): void {
+  confirmed = value;
+  const next = { ...value } as Record<keyof AppSettings, unknown>;
+  for (const k of pendingFields.keys()) next[k] = current[k];
+  publish(normalizeSettings(next));
 }
 
 export const getSettings = (): AppSettings => current;
@@ -64,27 +78,38 @@ export function useSettings(): AppSettings {
 /** Fetch from the backend; on failure the defaults stay in place. */
 export async function loadSettings(): Promise<AppSettings> {
   try {
-    publish(normalizeSettings(await call('get_settings', {})));
+    adoptConfirmed(normalizeSettings(await call('get_settings', {})));
   } catch { /* keep defaults / last known */ }
   return current;
 }
 
 /**
- * Optimistically apply `patch`, persist the merged value, adopt what the backend stored.
- * On failure the previous value is restored and the error is rethrown.
+ * Optimistically apply `patch`, then persist. Saves are serialized (one set_settings at a time, each sending the
+ * value current at its turn). A response never overwrites fields that a later save changed optimistically, and a
+ * failed save reverts only its own fields (unless a later save set them again), then rethrows.
  */
-export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
-  const prev = current;
-  const next = normalizeSettings({ ...prev, ...patch });
-  publish(next);
-  try {
-    const stored = normalizeSettings(await call('set_settings', { settings: next }));
-    publish(stored);
-    return stored;
-  } catch (e) {
-    publish(prev);
-    throw e;
-  }
+export function saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+  const seq = ++saveSeq;
+  const keys = Object.keys(patch) as (keyof AppSettings)[];
+  for (const k of keys) pendingFields.set(k, seq);
+  publish(normalizeSettings({ ...current, ...patch }));
+  const mine = () => keys.filter((k) => pendingFields.get(k) === seq);
+  const run = async (): Promise<AppSettings> => {
+    try {
+      const stored = normalizeSettings(await call('set_settings', { settings: current }));
+      for (const k of mine()) pendingFields.delete(k);
+      adoptConfirmed(stored);
+      return current;
+    } catch (e) {
+      const revert = {} as Record<keyof AppSettings, unknown>;
+      for (const k of mine()) { revert[k] = confirmed[k]; pendingFields.delete(k); }
+      publish(normalizeSettings({ ...current, ...revert }));
+      throw e;
+    }
+  };
+  const p = saveChain.then(run, run);
+  saveChain = p.catch(() => {});
+  return p;
 }
 
 let syncStarted = false;
@@ -92,12 +117,16 @@ let syncStarted = false;
 export function startSettingsSync(): void {
   if (syncStarted) return;
   syncStarted = true;
-  onEvent<unknown>(EVENT_SETTINGS_CHANGED, (p) => publish(normalizeSettings(p))).catch(() => { syncStarted = false; });
+  onEvent<unknown>(EVENT_SETTINGS_CHANGED, (p) => adoptConfirmed(normalizeSettings(p))).catch(() => { syncStarted = false; });
 }
 
 /** Test hook. */
 export function __resetSettingsForTests(): void {
   current = DEFAULT_SETTINGS;
+  confirmed = DEFAULT_SETTINGS;
+  pendingFields.clear();
+  saveSeq = 0;
+  saveChain = Promise.resolve();
   loaded = false;
   syncStarted = false;
   listeners.clear();

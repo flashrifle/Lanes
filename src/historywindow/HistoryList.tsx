@@ -2,7 +2,8 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useEffect, useRef, type KeyboardEvent } from 'react';
 import type { FileHistoryEntry } from '../types';
-import { formatCommitDate, formatFullDate } from '../ui/format/date';
+import { formatFullDate } from '../ui/format/date';
+import { CommitDate } from '../ui/format/CommitDate';
 import { basename } from './session';
 import { t } from '../i18n';
 
@@ -33,7 +34,7 @@ const Row = memo(function Row({ e, selected }: { e: FileHistoryEntry; selected: 
       <div className="hw-item-line2">
         <span className="hw-item-hash">{e.hash.slice(0, 8)}</span>
         <span className="hw-item-author">{e.authorName}</span>
-        <span className="hw-item-date">{formatCommitDate(e.authorTime)}</span>
+        <span className="hw-item-date"><CommitDate ts={e.authorTime} /></span>
         {renamed && (
           <span className="hw-badge" title={e.oldPath ?? ''}>
             {e.status === 'copied' ? t('hw.copiedFrom', { name: basename(e.oldPath!) }) : t('hw.renamedFrom', { name: basename(e.oldPath!) })}

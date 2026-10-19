@@ -3,6 +3,7 @@ import { call } from '../../api';
 import { t } from '../../i18n';
 import type { MergeMode, Ref, ResetMode } from '../../types';
 import { Modal } from '../dialogs/Modal';
+import { useStoreState } from '../state/createStore';
 import { useRepo, useRepoStore } from '../state/repoContext';
 import { headCtxOf, resetConfirmWord, resetReady, shortHash } from './logic';
 
@@ -24,6 +25,7 @@ export function MergeDialog({ refToMerge }: { refToMerge: Ref }) {
   const [busy, setBusy] = useState(false);
   const canMessage = mode === 'default' || mode === 'noFf';
   const run = async () => {
+    if (busy) return;
     setBusy(true);
     ops.close();
     await ops.merge({ ref: refToMerge.fullName, mode, message: canMessage && message.trim() ? message.trim() : null }, refToMerge.name);
@@ -81,13 +83,16 @@ export function ResetDialog({ hash }: { hash: string }) {
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [mine] = useState(() => ops.getState().dialog);
+  // Tracked files with uncommitted changes (untracked files survive `reset --hard`).
+  const lost = useStoreState(store.commit, (s) => s.status?.files.filter((f) => !f.untracked).length ?? null);
   const ready = resetReady(mode, typed, word);
   const run = async () => {
     if (!ready || busy) return;
     setBusy(true);
     const e = await ops.reset({ hash, mode, discardLocalChanges: mode === 'hard' });
     setBusy(false);
-    if (e) setErr(e.stderr?.trim() || e.message); else ops.close();
+    if (e) setErr(e.stderr?.trim() || e.message); else ops.closeIf(mine);
   };
   const MODE_ROWS: { id: ResetMode; label: string; hint: string }[] = [
     { id: 'soft', label: t('reset.soft'), hint: t('reset.softHint') },
@@ -95,7 +100,7 @@ export function ResetDialog({ hash }: { hash: string }) {
     { id: 'hard', label: t('reset.hard'), hint: t('reset.hardHint') },
   ];
   return (
-    <Modal title={t('reset.title')} onClose={ops.close} onSubmit={() => void run()}>
+    <Modal title={t('reset.title')} onClose={ops.close} busy={busy} onSubmit={() => void run()}>
       <p>{t('reset.desc', { branch: head.branch ?? 'HEAD', hash: shortHash(hash) })}</p>
       <div className="ops-radios" role="radiogroup">
         {MODE_ROWS.map((m) => (
@@ -108,6 +113,7 @@ export function ResetDialog({ hash }: { hash: string }) {
       {mode === 'hard' && (
         <div className="ops-danger-box">
           <p>{t('reset.hardWarn', { cur: shortHash(head.hash) })}</p>
+          {lost != null && lost > 0 && <p className="field-error">{t('reset.hardLost', { n: lost })}</p>}
           <p className="muted">{t('reset.reflogHint')}</p>
           <p>{t('reset.typeToConfirm', { word })}</p>
           <input className="text-input" autoFocus spellCheck={false} value={typed} placeholder={word} onChange={(e) => setTyped(e.target.value)} />
@@ -115,7 +121,7 @@ export function ResetDialog({ hash }: { hash: string }) {
       )}
       <div className="field-error">{err ?? ' '}</div>
       <div className="modal-actions">
-        <button type="button" className="btn" autoFocus={mode !== 'hard'} onClick={ops.close}>{t('common.cancel')}</button>
+        <button type="button" className="btn" autoFocus={mode !== 'hard'} disabled={busy} onClick={ops.close}>{t('common.cancel')}</button>
         <button type="submit" className={'btn ' + (mode === 'hard' ? 'danger' : 'primary')} disabled={!ready || busy}>{t('reset.run')}</button>
       </div>
     </Modal>
@@ -133,9 +139,12 @@ export function TagDialog({ hash }: { hash: string }) {
   const [problem, setProblem] = useState<string | null>(null);
   const [valid, setValid] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [mine] = useState(() => ops.getState().dialog);
 
   useEffect(() => {
-    if (name.trim() === '') { setValid(false); setProblem(null); return; }
+    // Any edit invalidates the previous answer until the new name is validated (Enter is blocked meanwhile).
+    setValid(false);
+    if (name.trim() === '') { setProblem(null); return; }
     let cancelled = false;
     const timer = setTimeout(() => {
       call('validate_tag_name', { repoPath: repo.path, name: name.trim() })
@@ -155,17 +164,17 @@ export function TagDialog({ hash }: { hash: string }) {
     setBusy(true);
     const e = await ops.createTag(name.trim(), hash, annotated ? message.trim() : null);
     setBusy(false);
-    if (e) setProblem(e.stderr?.trim() || e.message); else ops.close();
+    if (e) setProblem(e.stderr?.trim() || e.message); else ops.closeIf(mine);
   };
   return (
-    <Modal title={t('tag.title')} onClose={ops.close} onSubmit={() => void run()}>
+    <Modal title={t('tag.title')} onClose={ops.close} busy={busy} onSubmit={() => void run()}>
       <p className="muted">{t('tag.at', { hash: shortHash(hash) })}</p>
       <input className={'text-input' + (problem ? ' error' : '')} autoFocus spellCheck={false} placeholder={t('tag.namePh')} value={name} onChange={(e) => setName(e.target.value)} />
       <div className="field-error">{problem ?? ' '}</div>
       <label className="check-row"><input type="checkbox" checked={annotated} onChange={(e) => setAnnotated(e.target.checked)} />{t('tag.annotated')}</label>
       {annotated && <textarea className="text-input ops-textarea" placeholder={t('tag.messagePh')} value={message} onChange={(e) => setMessage(e.target.value)} rows={3} />}
       <div className="modal-actions">
-        <button type="button" className="btn" onClick={ops.close}>{t('common.cancel')}</button>
+        <button type="button" className="btn" disabled={busy} onClick={ops.close}>{t('common.cancel')}</button>
         <button type="submit" className="btn primary" disabled={!ok}>{t('tag.create')}</button>
       </div>
     </Modal>

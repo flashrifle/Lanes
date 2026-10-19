@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { call, toAppError } from '../api';
 import { t } from '../i18n';
 import type { LineHistory, LineHistoryEntry, LineRange } from '../types';
-import { formatCommitDate, formatFullDate } from '../ui/format/date';
+import { formatFullDate } from '../ui/format/date';
+import { CommitDate } from '../ui/format/CommitDate';
 import { basename } from './session';
 
 export interface LineMode {
@@ -92,7 +93,7 @@ export function LineHistoryView({ repoPath, mode, onBack }: Props) {
                     <div className="hw-item-line2">
                       <span className="hw-item-hash">{e.hash.slice(0, 8)}</span>
                       <span className="hw-item-author">{e.authorName}</span>
-                      <span className="hw-item-date">{formatCommitDate(e.authorTime)}</span>
+                      <span className="hw-item-date"><CommitDate ts={e.authorTime} /></span>
                       <span className="grow" />
                       <span>{t('history.hunkCount', { n: e.hunks.length })}</span>
                     </div>

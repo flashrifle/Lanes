@@ -44,6 +44,7 @@ export const opsEn: Record<keyof typeof opsKo, Entry> = {
   'reset.hard': 'Hard',
   'reset.hardHint': 'Reset HEAD, index and working tree',
   'reset.hardWarn': (p: Params) => `All uncommitted local changes will be discarded and cannot be recovered. Commits at the current HEAD (${p.cur}) can still be recovered from the reflog.`,
+  'reset.hardLost': (p: Params) => `${Number(p.n).toLocaleString('en-US')} ${Number(p.n) === 1 ? 'file with uncommitted changes' : 'files with uncommitted changes'} will be lost.`,
   'reset.reflogHint': 'To recover, find the previous commit in the reflog and reset to it.',
   'reset.typeToConfirm': (p: Params) => `Type “${p.word}” to confirm.`,
   'reset.run': 'Reset',

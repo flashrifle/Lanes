@@ -41,6 +41,10 @@ const base: Record<keyof typeof koBase, Entry> = {
 
   'tabs.aria': 'Open repositories',
   'tabs.close': 'Close Tab',
+  'tabs.closeConfirm.title': (p: Params) => `Close "${p.name}"?`,
+  'tabs.closeConfirm.draft': 'The commit message you are writing will be lost.',
+  'tabs.closeConfirm.busy': 'An operation is still running. It keeps running, but its result will not be shown.',
+  'tabs.closeConfirm.confirm': 'Close Tab',
 
   'welcome.subtitle': 'Open a Git repository to browse its commit log.',
   'welcome.recent': 'Recent',
@@ -79,6 +83,7 @@ const base: Record<keyof typeof koBase, Entry> = {
   'store.hiddenByFilter': 'This commit is hidden by the current filter',
   'store.notLoaded': "This commit isn't in the loaded log",
   'store.done': 'Done',
+  'store.dialogDropped': 'Another confirmation is open; this request was skipped',
   'store.checkout': (p: Params) => `Checking out ${p.name}…`,
   'store.checkingOut': 'Checking out…',
   'store.checkoutRev.title': 'Checkout Revision',

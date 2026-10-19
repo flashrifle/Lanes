@@ -46,6 +46,26 @@ export function commitMenuState(h: HeadCtx, hashes: readonly string[], focusHash
   };
 }
 
+/**
+ * "Undo Commit…" (IntelliJ): soft reset of the current branch to HEAD's first parent. Allowed only for exactly one
+ * targeted commit that is HEAD on a branch (not detached / unborn), has a parent, and with no operation running.
+ * `parentCount` = parents of that commit (null = unknown).
+ */
+export function canUndoCommit(h: HeadCtx, hashes: readonly string[], parentCount: number | null): boolean {
+  return hashes.length === 1 && h.hash != null && hashes[0] === h.hash
+    && !h.detached && !h.unborn && h.branch != null && h.operation == null
+    && parentCount != null && parentCount > 0;
+}
+
+/**
+ * Whether HEAD is already on the remote: it has an upstream and is not ahead of it (ahead 0 = upstream contains
+ * HEAD). An upstream with unknown ahead (gone / not computed) counts as pushed, to warn rather than not.
+ */
+export function headIsPushed(status: { upstream: string | null; ahead: number | null } | null | undefined): boolean {
+  if (!status || status.upstream == null) return false;
+  return status.ahead == null || status.ahead === 0;
+}
+
 export interface BranchMenuState { merge: boolean; rebase: boolean; compare: boolean; push: boolean; reflog: boolean }
 
 export function branchMenuState(h: HeadCtx, ref: Ref): BranchMenuState {

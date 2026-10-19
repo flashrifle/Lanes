@@ -7,19 +7,48 @@ export const MAX_URL_LENGTH = 7500;
 const STDERR_TAIL_LINES = 20;
 const STDERR_START_CHARS = 2000;
 
-/** Replace the user's home directory by `~` (explicit `home` first, then generic /Users/<n>, /home/<n>). */
+/**
+ * Replace the user's home directory by `~` (explicit `home` first, then generic /Users/<n>, /home/<n>, and
+ * Windows C:\Users\<n>).
+ */
 export function redactHome(text: string, home?: string | null): string {
   let out = text;
-  if (home && home.length > 1) out = out.split(home.replace(/\/+$/, '')).join('~');
-  return out.replace(/\/Users\/[^/\s'"`:]+/g, '~').replace(/\/home\/[^/\s'"`:]+/g, '~');
+  if (home && home.length > 1) out = out.split(home.replace(/[\\/]+$/, '')).join('~');
+  return out
+    .replace(/\/Users\/[^/\s'"`:]+/g, '~')
+    .replace(/\/home\/[^/\s'"`:]+/g, '~')
+    .replace(/\b[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s'"`:]+/gi, '~');
 }
+
+/** `scheme://user:token@host` → `scheme://***@host` (credentials in remote URLs). */
+export function redactUserinfo(text: string): string {
+  return text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^/\s@'"`]+@/gi, '$1***@');
+}
+
+/** Everything that may identify the user or leak a secret. */
+export function redact(text: string, home?: string | null): string {
+  return redactUserinfo(redactHome(text, home));
+}
+
+/** Replace lone surrogates by U+FFFD (encodeURIComponent throws on them). */
+export function wellFormed(s: string): string {
+  const native = (s as { toWellFormed?: () => string }).toWellFormed;
+  if (typeof native === 'function') return native.call(s);
+  return s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD');
+}
+
+/** Code-point length / slices: never cut a surrogate pair in half. */
+const cps = (s: string): string[] => Array.from(s);
+export const cpLength = (s: string): number => cps(s).length;
+export const cpHead = (s: string, n: number): string => cps(s).slice(0, Math.max(0, n)).join('');
+export const cpTail = (s: string, n: number): string => (n <= 0 ? '' : cps(s).slice(-n).join(''));
 
 /** Last `maxLines` non-empty lines, additionally capped to the last `maxChars` characters. */
 export function stderrTail(stderr: string | null | undefined, maxLines = STDERR_TAIL_LINES, maxChars = STDERR_START_CHARS): string {
   if (!stderr) return '';
   const lines = stderr.replace(/\r\n?/g, '\n').split('\n').map((l) => l.trimEnd()).filter((l) => l.trim() !== '');
   let tail = lines.slice(-maxLines).join('\n');
-  if (tail.length > maxChars) tail = '…' + tail.slice(tail.length - maxChars);
+  if (cpLength(tail) > maxChars) tail = '…' + cpTail(tail, maxChars);
   return tail;
 }
 
@@ -35,7 +64,7 @@ export interface ReportIssue {
   body: string;
 }
 
-const clip = (s: string, n: number): string => (s.length <= n ? s : s.slice(0, Math.max(0, n - 1)) + '…');
+const clip = (s: string, n: number): string => (cpLength(s) <= n ? s : cpHead(s, n - 1) + '…');
 
 function fence(text: string): string {
   // a ``` inside stderr would break the block
@@ -44,7 +73,7 @@ function fence(text: string): string {
 
 function compose(input: ReportInput, stderrChars: number, messageChars: number): { title: string; body: string } {
   const { diagnostics: d, error: e, home } = input;
-  const r = (s: string) => redactHome(s, home);
+  const r = (s: string) => redact(wellFormed(s), home);
   const title = e ? `[Bug] ${e.code}: ${clip(r(e.message).replace(/\s+/g, ' '), 80)}` : '[Bug] ';
   const lines: string[] = ['**What happened?**', '', '<!-- Describe what you did and what you expected. -->', '', '**Environment**', ''];
   if (d) {
@@ -62,7 +91,7 @@ function compose(input: ReportInput, stderrChars: number, messageChars: number):
 }
 
 const urlFor = (title: string, body: string): string =>
-  `${ISSUES_NEW_URL}?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+  `${ISSUES_NEW_URL}?title=${encodeURIComponent(wellFormed(title))}&body=${encodeURIComponent(wellFormed(body))}`;
 
 /** Build the issue; shrinks stderr, then the message, then the body until the URL is <= MAX_URL_LENGTH. */
 export function buildReportIssue(input: ReportInput): ReportIssue {
@@ -79,7 +108,7 @@ export function buildReportIssue(input: ReportInput): ReportIssue {
       let b = body;
       let u = url;
       while (u.length > MAX_URL_LENGTH && b.length > 0) {
-        b = b.slice(0, Math.floor(b.length * 0.8));
+        b = cpHead(b, Math.floor(cpLength(b) * 0.8));
         u = urlFor(title, b);
       }
       return { url: u, title, body: b };

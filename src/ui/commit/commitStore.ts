@@ -1,6 +1,7 @@
 // Working tree / staging / commit / stash state for one repo tab. Owned by ui-commit (docs/PLAN-v0.1.md).
 // - get_status is single-flight (calls arriving mid-flight coalesce into one re-run).
-// - Every write goes through one serialized queue per repo, and is retried once after 500 ms on `busy`.
+// - Every write goes through the repo's single serialized queue (RepoStore.queue, shared with RepoStore.runOp), and is
+//   retried once after 500 ms on `busy`.
 // - Light ops (stage / unstage) refresh status only; ops that move refs go through RepoStore.runOp (toast + reload).
 import { call, toAppError } from '../../api';
 import type {
@@ -11,6 +12,14 @@ import type { RepoStore } from '../state/repoStore';
 import { t } from '../../i18n';
 import { createOpQueue, type OpQueue, type Sleep } from './opQueue';
 import { discardRequestOf, type WorkingEntry } from './workingFiles';
+import { conflictSideLabel } from './conflictLabels';
+
+/** Names listed in a confirm dialog; the rest is summarized as "and N more". */
+const CONFIRM_LIST_MAX = 50;
+export function confirmList(names: readonly string[], max = CONFIRM_LIST_MAX): string[] {
+  const u = [...new Set(names)];
+  return u.length > max ? [...u.slice(0, max), t('commit.discard.more', { n: u.length - max })] : u;
+}
 
 export type CommitDialog =
   | { kind: 'none' }
@@ -53,7 +62,9 @@ export class CommitStore extends Store<CommitState> {
   private disposed = false;
   private inflight: Promise<void> | null = null;
   private again = false;
-  private stashWanted = false;
+  /** The stash list is visible: keep it fresh after status refreshes (once per refresh burst). */
+  private stashPanelOpen = false;
+  private stashErrorShown = false;
   /** Draft saved when "Amend" prefilled the message, restored when amend is turned off again. */
   private draftBeforeAmend: string | null = null;
   private amendPrefill: string | null = null;
@@ -64,8 +75,12 @@ export class CommitStore extends Store<CommitState> {
       status: null, statusLoading: false, statusError: null, message: '', amend: false, signOff: false,
       committing: false, pending: 0, stashes: null, stashLoading: false, dialog: { kind: 'none' },
     });
-    this.queue = createOpQueue(sleep, (pending) => { if (!this.disposed) this.set({ pending }); });
+    // One queue per repo, owned by RepoStore (shared with runOp). A bare repo (tests) gets a private one.
+    this.queue = (repo as Partial<RepoStore>).queue ?? createOpQueue(sleep, (pending) => this.syncPending(pending));
   }
+
+  /** Queue length changed (called by RepoStore's queue). */
+  syncPending(pending: number): void { this.set({ pending }); }
 
   protected override set(patch: Partial<CommitState>): void {
     if (!this.disposed) super.set(patch);
@@ -82,11 +97,14 @@ export class CommitStore extends Store<CommitState> {
         try {
           const status = await call('get_status', { repoPath: this.repo.path });
           this.set({ status, statusError: null });
+          // Clean tree while its row is selected: the row disappears, fall back to the HEAD commit.
+          if (status.files.length === 0 && !this.disposed) this.repo.leaveWorking?.();
         } catch (e) {
           this.set({ statusError: toAppError(e) });
         }
-        if (this.stashWanted) await this.fetchStashes();
       } while (this.again && !this.disposed);
+      // Once per refresh burst, and only while the stash list is on screen.
+      if (this.stashPanelOpen && !this.disposed) await this.fetchStashes();
       this.set({ statusLoading: false });
     })().finally(() => { this.inflight = null; });
     return this.inflight;
@@ -115,9 +133,9 @@ export class CommitStore extends Store<CommitState> {
     }
   }
 
-  /** Queued op through RepoStore.runOp (progress toast → info toast + reload). Error toast on failure. */
+  /** Queued op through RepoStore.runOp (repo queue, progress toast → info toast + reload). Error toast on failure. */
   private async heavy(label: string, fn: (repoPath: string) => Promise<{ message: string }>, toast = true): Promise<OpRes> {
-    const o = await this.repo.runOp(label, (repoPath) => this.queue.run(() => fn(repoPath)));
+    const o = await this.repo.runOp(label, fn);
     if (!o.ok && toast) this.toastError(o.error);
     return o;
   }
@@ -143,13 +161,11 @@ export class CommitStore extends Store<CommitState> {
     const req = discardRequestOf(entries);
     const n = new Set([...req.paths, ...req.untrackedPaths]).size;
     if (n === 0) return;
-    const names = entries.map((e) => e.file.path);
-    const unique = [...new Set(names)];
-    const list = unique.slice(0, 5).join(', ') + (unique.length > 5 ? ' ' + t('commit.discard.more', { n: unique.length - 5 }) : '');
     this.repo.openDialog({
       kind: 'confirm',
       title: t('commit.discard.title', { n }),
-      message: (req.untrackedPaths.length ? t('commit.discard.msgUntracked') : req.includeStaged ? t('commit.discard.msgStaged') : t('commit.discard.msg')) + ' ' + list,
+      message: req.untrackedPaths.length ? t('commit.discard.msgUntracked') : req.includeStaged ? t('commit.discard.msgStaged') : t('commit.discard.msg'),
+      details: confirmList(entries.map((e) => e.file.path)),
       confirmLabel: t('commit.discard.confirm'),
       danger: true,
       onConfirm: () => {
@@ -161,6 +177,26 @@ export class CommitStore extends Store<CommitState> {
 
   resolveConflict = (paths: string[], side: ConflictSide): Promise<OpRes> =>
     this.heavy(t('conflict.resolving'), (repoPath) => call('resolve_conflict', { repoPath, paths, side }));
+
+  /** Accept ours / theirs overwrites the files: always confirm (danger), listing the files. */
+  confirmResolveConflict = (paths: readonly string[], side: ConflictSide): void => {
+    const list = [...new Set(paths)];
+    if (list.length === 0) return;
+    const label = conflictSideLabel(side, this.state.status?.operation ?? null);
+    this.repo.openDialog({
+      kind: 'confirm',
+      title: t('conflict.accept.title', { side: label, n: list.length }),
+      message: t('conflict.accept.msg', { n: list.length }),
+      details: confirmList(list),
+      warning: t('conflict.accept.warn'),
+      confirmLabel: label,
+      danger: true,
+      onConfirm: () => {
+        this.repo.closeDialog();
+        void this.resolveConflict(list, side);
+      },
+    });
+  };
 
   openInEditor = (path: string): void => {
     call('open_in_editor', { repoPath: this.repo.path, path }).catch((e) => this.toastError(toAppError(e)));
@@ -269,23 +305,37 @@ export class CommitStore extends Store<CommitState> {
   // ───────────── stash ─────────────
   openStashSave = (paths: string[] | null = null): void => { this.set({ dialog: { kind: 'stashSave', paths } }); };
   closeDialog = (): void => { this.set({ dialog: { kind: 'none' } }); };
+  /** Close only if `d` is still the open dialog. */
+  closeDialogIf = (d: CommitDialog): void => { if (this.state.dialog === d) this.closeDialog(); };
 
-  private async fetchStashes(): Promise<void> {
-    try {
-      const stashes = await call('list_stashes', { repoPath: this.repo.path });
-      this.set({ stashes });
-    } catch (e) {
-      this.set({ stashes: this.state.stashes ?? [] });
-      this.toastError(toAppError(e));
-    }
+  private stashInflight: Promise<void> | null = null;
+  /** list_stashes, single-flight. An error toasts once until a fetch succeeds again. */
+  private fetchStashes(): Promise<void> {
+    if (this.stashInflight) return this.stashInflight;
+    this.stashInflight = (async () => {
+      try {
+        const stashes = await call('list_stashes', { repoPath: this.repo.path });
+        this.stashErrorShown = false;
+        this.set({ stashes });
+      } catch (e) {
+        this.set({ stashes: this.state.stashes ?? [] });
+        if (!this.stashErrorShown) { this.stashErrorShown = true; this.toastError(toAppError(e)); }
+      }
+    })().finally(() => { this.stashInflight = null; });
+    return this.stashInflight;
   }
 
-  /** Load the stash list now and keep it fresh on every status refresh. */
+  /** Load the stash list now (count in the stash header). */
   loadStashes = async (): Promise<void> => {
-    this.stashWanted = true;
     this.set({ stashLoading: true });
     await this.fetchStashes();
     this.set({ stashLoading: false });
+  };
+
+  /** The stash list was expanded / collapsed. While open it follows status refreshes. */
+  setStashPanelOpen = (open: boolean): void => {
+    this.stashPanelOpen = open;
+    if (open) void this.loadStashes();
   };
 
   saveStash = async (request: StashSaveRequest): Promise<boolean> => {

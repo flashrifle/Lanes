@@ -12,6 +12,7 @@ import { SplitPane } from './ui/layout/SplitPane';
 import { FilterBar } from './ui/log/FilterBar';
 import { LogTable } from './ui/log/LogTable';
 import { IS_MAC } from './ui/platform';
+import { hasLayer, hasModalLayer } from './ui/common/layers';
 import { FilePickerHost, filePicker } from './historywindow/FilePicker';
 import { appStore, useApp, type TabEntry } from './ui/state/appStore';
 import { RepoCtx, useRepo, useRepoStore } from './ui/state/repoContext';
@@ -135,6 +136,18 @@ function TabPane({ tab, active }: { tab: TabEntry; active: boolean }) {
 function useGlobalShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Escape with nothing open (layers handle their own Escape first, in capture): clear the branch highlight,
+      // wherever focus is, unless a text field / control is using the key.
+      if (e.key === 'Escape') {
+        if (e.defaultPrevented || hasLayer()) return;
+        const el = e.target as HTMLElement | null;
+        if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+        const store = appStore.activeStore();
+        if (store?.getState().highlightKey) { e.preventDefault(); store.setHighlightKey(null); }
+        return;
+      }
+      // Global shortcuts never act behind a modal dialog (⌘W would close the tab under it).
+      if (hasModalLayer()) return;
       if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
         appStore.cycle(e.shiftKey ? -1 : 1);

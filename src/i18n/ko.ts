@@ -44,6 +44,10 @@ export const koBase = {
   // tabs
   'tabs.aria': '열린 저장소',
   'tabs.close': '탭 닫기',
+  'tabs.closeConfirm.title': (p: Params) => `"${p.name}" 탭을 닫을까요?`,
+  'tabs.closeConfirm.draft': '작성 중인 커밋 메시지가 사라집니다.',
+  'tabs.closeConfirm.busy': '진행 중인 작업이 있습니다. 탭을 닫아도 작업은 계속되지만 결과는 표시되지 않습니다.',
+  'tabs.closeConfirm.confirm': '탭 닫기',
 
   // welcome
   'welcome.subtitle': 'Git 저장소를 열어 커밋 로그를 확인하세요.',
@@ -87,6 +91,7 @@ export const koBase = {
   'store.hiddenByFilter': '현재 필터에서 보이지 않는 커밋입니다',
   'store.notLoaded': '로드된 로그에 없는 커밋입니다',
   'store.done': '완료',
+  'store.dialogDropped': '다른 확인 창이 열려 있어 요청을 건너뛰었습니다',
   'store.checkout': (p: Params) => `체크아웃: ${p.name}`,
   'store.checkingOut': '체크아웃…',
   'store.checkoutRev.title': '리비전 체크아웃',

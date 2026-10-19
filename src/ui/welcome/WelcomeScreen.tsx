@@ -3,7 +3,7 @@ import { call } from '../../api';
 import { appUi } from '../app/appUi';
 import { appStore, useApp } from '../state/appStore';
 import { Tooltip } from '../common/Tooltip';
-import { formatCommitDate } from '../format/date';
+import { CommitDate } from '../format/CommitDate';
 import { t } from '../../i18n';
 
 export function WelcomeScreen() {
@@ -37,7 +37,7 @@ export function WelcomeScreen() {
                     <span className="recent-name">{r.name}</span>
                     <span className="recent-path">{r.path}</span>
                   </button>
-                  <span className="recent-date">{r.exists ? formatCommitDate(r.lastOpened) : t('welcome.missing')}</span>
+                  <span className="recent-date">{r.exists ? <CommitDate ts={r.lastOpened} /> : t('welcome.missing')}</span>
                   <Tooltip label={t('welcome.removeRecent')} side="left"><button className="icon-btn" onClick={() => void appStore.removeRecent(r.path)}>×</button></Tooltip>
                 </li>
               ))}

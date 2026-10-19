@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayer } from './layers';
 
 export type MenuItem = { label: string; onClick: () => void; disabled?: boolean } | { separator: true };
 
@@ -19,16 +20,15 @@ export function ContextMenu({ menu, onClose }: { menu: MenuState; onClose: () =>
 
   useEffect(() => {
     const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose(); };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
     window.addEventListener('mousedown', down, true);
-    window.addEventListener('keydown', key, true);
     window.addEventListener('blur', onClose);
     return () => {
       window.removeEventListener('mousedown', down, true);
-      window.removeEventListener('keydown', key, true);
       window.removeEventListener('blur', onClose);
     };
   }, [onClose]);
+  // Escape goes to the topmost layer only (a menu over a dialog closes the menu, not the dialog).
+  useLayer(onClose);
 
   return (
     <div ref={ref} className="ctx-menu" style={{ left: pos.x, top: pos.y }} role="menu" onContextMenu={(e) => e.preventDefault()}>

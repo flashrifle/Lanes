@@ -175,5 +175,5 @@
     "1:4"
   ],
   "mode": "unstage",
-  "patch": "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -9,7 +9,7 @@\n line 9\n line 10\n line 11\n-line 12\n+line twelve\n line 13\n line 14\n line 15\n"
+  "patch": "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -11,7 +11,7 @@\n line 9\n line 10\n line 11\n-line 12\n+line twelve\n line 13\n line 14\n line 15\n"
 }

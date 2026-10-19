@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AppError, Diagnostics } from '../../types';
-import { buildReportIssue, ISSUES_NEW_URL, MAX_URL_LENGTH, redactHome, stderrTail } from './reportIssue';
+import { buildReportIssue, cpHead, ISSUES_NEW_URL, MAX_URL_LENGTH, redact, redactHome, redactUserinfo, stderrTail, wellFormed } from './reportIssue';
 
 const diag: Diagnostics = {
   appVersion: '0.1.0', os: 'macOS 15.1', arch: 'aarch64', gitVersion: '2.50.1', gitPath: '/Users/alice/bin/git', locale: 'ko-KR',
@@ -77,5 +77,44 @@ describe('buildReportIssue', () => {
   it('neutralizes code fences inside stderr', () => {
     const body = parse(buildReportIssue({ diagnostics: diag, error: err({ stderr: 'a ``` b' }) }).url).body;
     expect(body.match(/```/g)?.length).toBe(2);
+  });
+});
+
+describe('redaction (userinfo, Windows paths)', () => {
+  it('strips credentials from URLs', () => {
+    expect(redactUserinfo('fatal: https://alice:ghp_secret123@github.com/x/y.git')).toBe('fatal: https://***@github.com/x/y.git');
+    expect(redactUserinfo('ssh://git@host:22/r and http://tok@h/p')).toBe('ssh://***@host:22/r and http://***@h/p');
+    expect(redactUserinfo('git@github.com:x/y.git user@example.com')).toBe('git@github.com:x/y.git user@example.com');
+  });
+  it('redacts Windows user paths', () => {
+    expect(redactHome('C:\\Users\\alice\\repo\\x')).toBe('~\\repo\\x');
+    expect(redactHome('at d:/users/Bob/code')).toBe('at ~/code');
+    expect(redactHome('C:\\Users\\alice\\r', 'C:\\Users\\alice\\')).toBe('~\\r');
+  });
+  it('the report never contains the token', () => {
+    const r = buildReportIssue({ diagnostics: diag, error: err({ message: 'push to https://u:s3cr3t@h/r failed', stderr: 'remote: https://u:s3cr3t@h/r' }) });
+    expect(decodeURIComponent(r.url)).not.toContain('s3cr3t');
+    expect(redact('https://u:p@h C:\\Users\\me\\x')).toBe('https://***@h ~\\x');
+  });
+});
+
+describe('unicode safety', () => {
+  it('wellFormed replaces lone surrogates only', () => {
+    expect(wellFormed('a\uD83Db')).toBe('a\uFFFDb');
+    expect(wellFormed('x\uDE00')).toBe('x\uFFFD');
+    expect(wellFormed('ok 😀')).toBe('ok 😀');
+  });
+  it('cpHead never splits a surrogate pair', () => {
+    expect(cpHead('😀😀😀', 2)).toBe('😀😀');
+  });
+  it('builds a valid URL when every limit cuts through emoji', () => {
+    const emoji = '😀'.repeat(5000);
+    const r = buildReportIssue({ diagnostics: diag, error: err({ message: emoji, stderr: emoji + '\n' + emoji }) });
+    expect(r.url.length).toBeLessThanOrEqual(MAX_URL_LENGTH);
+    expect(() => decodeURIComponent(r.url)).not.toThrow();
+    expect(parse(r.url).body).not.toMatch(/\uFFFD/);
+  });
+  it('does not throw on a lone surrogate in the input', () => {
+    expect(() => buildReportIssue({ diagnostics: diag, error: err({ message: 'bad \uD800 text', stderr: '\uDFFF' }) })).not.toThrow();
   });
 });

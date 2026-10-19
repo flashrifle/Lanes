@@ -26,6 +26,7 @@ export const appEn: Record<keyof typeof appKo, Entry> = {
   'settings.git.applied': 'Applied',
   'settings.editor': 'External editor',
   'settings.editor.ph': 'App name or .app path (empty = default app)',
+  'settings.editor.unsaved': 'Not saved yet — press Enter or close to save',
   'settings.editor.hint': 'e.g. Visual Studio Code, /Applications/Xcode.app',
   'settings.updates': 'Updates',
   'settings.updates.auto': 'Check for updates on launch',

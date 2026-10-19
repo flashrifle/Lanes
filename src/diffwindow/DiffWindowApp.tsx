@@ -51,7 +51,20 @@ interface Loaded {
   diff: FileDiff;
   model: DiffModel;
   partial: boolean; // full-context diff was truncated → refetched with 3 context lines
+  /** Content signature (file key + hunks): equal signatures = same diff, line selection stays valid. */
+  sig: string;
 }
+
+interface CacheEntry { data: Loaded; gen: number }
+/**
+ * Window-level (module) state, so a LangRoot remount (language switch) keeps the file, the cache and the line
+ * selection. `gen` is bumped by every working-tree refresh: working-tree entries from an older gen are stale.
+ */
+const win = {
+  cache: new Map<string, CacheEntry>(),
+  gen: 0,
+  kept: null as null | { session: DiffSession; index: number; sel: ReadonlySet<string>; selSig: string | null },
+};
 
 type LoadState =
   | { kind: 'loading' }
@@ -65,6 +78,8 @@ const isWorkingFile = (f: ChangedFile) => isWorkingRev(f.toHash);
 /** repo-changed scopes that can change a working-tree diff. */
 const WORKING_SCOPES: readonly RepoChangeScope[] = ['index', 'worktree', 'head'];
 
+export const diffSig = (key: string, d: FileDiff): string => key + '\n' + d.oldMode + d.newMode + JSON.stringify(d.hunks);
+
 async function fetchDiff(repoPath: string, f: ChangedFile): Promise<Loaded> {
   const request = { path: f.path, oldPath: f.oldPath, fromHash: f.fromHash, toHash: f.toHash, contextLines: FULL_CONTEXT };
   let diff = await call('get_file_diff', { repoPath, request });
@@ -73,7 +88,7 @@ async function fetchDiff(repoPath: string, f: ChangedFile): Promise<Loaded> {
     diff = await call('get_file_diff', { repoPath, request: { ...request, contextLines: 3 } });
     partial = true;
   }
-  return { diff, model: buildDiffModel(diff), partial };
+  return { diff, model: buildDiffModel(diff), partial, sig: diffSig(fileKey(f), diff) };
 }
 
 function initialSessionId(): string | null {
@@ -114,22 +129,24 @@ const statusLabel = (s: ChangedFile['status']): string => t(`dw.status.${s}`);
 
 export default function DiffWindowApp() {
   const [session, setSession] = useState<DiffSession | null>(() => {
+    if (win.kept) return win.kept.session;
     const id = initialSessionId();
     return id ? loadDiffSession(id) : null;
   });
-  const [index, setIndex] = useState(() => session?.index ?? 0);
+  const [index, setIndex] = useState(() => win.kept?.index ?? session?.index ?? 0);
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [entryBlock, setEntryBlock] = useState<'first' | 'last'>('first');
   const [menu, setMenu] = useState<null | 'files' | 'settings'>(null);
   const [hint, setHint] = useState<string | null>(null);
   const viewer = useRef<DiffViewerHandle>(null);
-  const cache = useRef(new Map<string, Loaded>());
+  const cache = useRef(win.cache);
   const edge = useRef<{ dir: 1 | -1; at: number } | null>(null);
   /** Bumped to re-fetch working-tree diffs (repo-changed, or after a staging op). */
   const [tick, setTick] = useState(0);
   const shown = useRef<{ key: string; ok: boolean }>({ key: '', ok: false });
-  const [stageSel, setStageSel] = useState<ReadonlySet<string>>(new Set());
+  const [stageSel, setStageSel] = useState<ReadonlySet<string>>(() => win.kept?.sel ?? new Set());
+  const selSig = useRef<string | null>(win.kept?.selSig ?? null);
 
   const files = session?.files ?? [];
   const file: ChangedFile | undefined = files[index];
@@ -165,10 +182,12 @@ export default function DiffWindowApp() {
       return;
     }
     const key = fileKey(file);
+    const gen = win.gen;
     const hit = cache.current.get(key);
-    if (hit) {
+    // Commit diffs never change; a working-tree entry is only valid for the refresh generation it was fetched in.
+    if (hit && (!isWorkingFile(file) || hit.gen === gen)) {
       shown.current = { key, ok: true };
-      setState({ kind: 'ok', data: hit });
+      setState((s) => (s.kind === 'ok' && s.data === hit.data ? s : { kind: 'ok', data: hit.data }));
       return;
     }
     // A working-tree refresh of the file on screen keeps showing the old diff until the new one arrives.
@@ -180,11 +199,17 @@ export default function DiffWindowApp() {
     let cancelled = false;
     fetchDiff(session.repoPath, file)
       .then((d) => {
+        // A superseded request (file switch, newer refresh) must not write: it may hold pre-refresh content.
+        if (cancelled || gen !== win.gen) return;
         if (cache.current.size > 40) cache.current.clear();
-        cache.current.set(key, d);
-        if (cancelled) return;
         shown.current = { key, ok: !d.diff.binary };
-        setState(d.diff.binary ? { kind: 'binary' } : { kind: 'ok', data: d });
+        if (d.diff.binary) { cache.current.set(key, { data: d, gen }); setState({ kind: 'binary' }); return; }
+        // Same content as on screen (e.g. a focus refresh): keep the shown object, so scroll and selection stay.
+        setState((s) => {
+          const same = s.kind === 'ok' && s.data.sig === d.sig;
+          cache.current.set(key, { data: same ? s.data : d, gen });
+          return same ? s : { kind: 'ok', data: d };
+        });
       })
       .catch((e) => {
         if (cancelled) return;
@@ -202,6 +227,7 @@ export default function DiffWindowApp() {
   const refreshWorking = useCallback(async (headMoved: boolean) => {
     const s = sessionRef.current;
     if (!s || !s.files.some(isWorkingFile)) return;
+    win.gen++;
     for (const f of s.files) if (isWorkingFile(f)) cache.current.delete(fileKey(f));
     if (headMoved) {
       // staged / conflict entries diff against HEAD: re-base them on the new HEAD
@@ -242,9 +268,18 @@ export default function DiffWindowApp() {
     return () => window.removeEventListener('focus', onFocus);
   }, [refreshWorking]);
 
-  // a new diff invalidates line selection keys
+  // A diff with different content invalidates line selection keys; a same-content refetch keeps them.
   const loadedDiff = state.kind === 'ok' ? state.data.diff : null;
-  useEffect(() => { setStageSel(new Set()); }, [loadedDiff]);
+  const loadedSig = state.kind === 'ok' ? state.data.sig : null;
+  useEffect(() => {
+    if (loadedSig === null || loadedSig === selSig.current) return;
+    selSig.current = loadedSig;
+    setStageSel(new Set());
+  }, [loadedSig]);
+  // remember what a remount needs
+  useEffect(() => {
+    win.kept = session ? { session, index, sel: stageSel, selSig: selSig.current } : null;
+  }, [session, index, stageSel, loadedSig]);
 
   // window title
   useEffect(() => {
@@ -369,6 +404,7 @@ export default function DiffWindowApp() {
   );
   const reloadDiff = useCallback(() => {
     if (file) cache.current.delete(fileKey(file));
+    win.gen++;
     setTick((n) => n + 1);
   }, [file]);
 

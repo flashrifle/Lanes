@@ -237,4 +237,24 @@ describe('re-targeting', () => {
     await Promise.all([first, second]);
     expect(h.model.getState().status?.files.map((f) => f.path)).toEqual(['z.ts']);
   });
+
+  it('a retarget during Commit & Push is ignored: the push finishes for the original repo', async () => {
+    const h = harness();
+    await h.model.retarget('/r1');
+    await h.model.toggle('a.ts');
+    h.model.setMessage('msg');
+    h.delay.push = 20;
+    const p = h.model.commit(true);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(h.model.getState().busy).not.toBeNull();
+    await h.model.retarget('/r2');
+    expect(h.model.getState().repoPath).toBe('/r1');
+    await p;
+    expect(h.calls.find((c) => c.cmd === 'push')?.args.repoPath).toBe('/r1');
+    expect(h.model.getState().done).toEqual({ pushed: true });
+    // once idle, retargeting works again
+    await h.model.retarget('/r2');
+    expect(h.model.getState().repoPath).toBe('/r2');
+  });
 });
+

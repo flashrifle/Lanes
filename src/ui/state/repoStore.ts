@@ -12,6 +12,7 @@ import {
 import { t } from '../../i18n';
 import { recordError } from '../app/lastError';
 import { CommitStore } from '../commit/commitStore';
+import { createOpQueue, type OpQueue, type Sleep } from '../commit/opQueue';
 import { OpsStore } from '../ops/opsStore';
 
 export const LOG_LIMIT = 200_000;
@@ -28,7 +29,16 @@ export type DialogState =
       danger?: boolean;
       onConfirm: () => void;
       alt?: { label: string; onClick: () => void };
+      /** Shown as a scrollable list under the message (e.g. affected file names). */
+      details?: string[];
+      /** Extra warning line (danger colour). */
+      warning?: string;
+      /** Focus Cancel instead of the primary button (dialogs that appear late, after an async op). */
+      noAutoFocus?: boolean;
     };
+
+/** Write ops that the toolbar guards against double clicks. */
+export type OpKey = 'fetch' | 'pull' | 'push';
 
 export interface ToastState { id: number; kind: 'progress' | 'info' | 'error'; text: string }
 
@@ -55,6 +65,10 @@ export interface RepoState {
   workingSelected: boolean;
   /** Highlighted branch line as GraphLayout.lineKey(); kept across reloads. null = no highlight. */
   highlightKey: string | null;
+  /** Write ops queued or running in this repo's queue (commit store + runOp). */
+  opPending: number;
+  /** Keyed ops (fetch / pull / push) currently queued or running. */
+  runningOps: OpKey[];
 }
 
 export function rowMapOf(layout: GraphLayout | null): RowMap {
@@ -96,15 +110,30 @@ export class RepoStore extends Store<RepoState> {
   /** Write-op dialogs: push, merge/rebase, cherry-pick/revert, reset, tags, reflog, compare (ui-ops). */
   readonly ops: OpsStore;
 
-  constructor(repo: RepoInfo, gen: number) {
+  /**
+   * The repo's single write queue: every write op (RepoStore.runOp, CommitStore light / heavy ops) runs here one at
+   * a time, with one retry on `busy`, so a checkout can't race a stage or a commit.
+   */
+  readonly queue: OpQueue;
+  /** Confirm dialogs that arrived while another dialog was open; shown one by one as dialogs close. */
+  private dialogQueue: DialogState[] = [];
+  /** Select the HEAD commit when the next log load is applied (working-tree row went away). */
+  private followHead = false;
+
+  constructor(repo: RepoInfo, gen: number, sleep?: Sleep) {
     super({
       repo, snapshot: null, layout: null, loading: false, filterUi: EMPTY_FILTER_UI, filterError: false,
       scopeRefs: null, sort: 'bek', matches: null, authors: [], selection: EMPTY_SELECTION,
       metaVersion: 0, sigVersion: 0, scrollRequest: null, toast: null, dialog: null, diff: null,
-      workingSelected: false, highlightKey: null,
+      workingSelected: false, highlightKey: null, opPending: 0, runningOps: [],
     });
     this.path = repo.path;
     this.gen = gen;
+    this.queue = createOpQueue(sleep, (opPending) => {
+      if (this.disposed) return;
+      this.set({ opPending });
+      this.commit?.syncPending(opPending);
+    });
     this.commit = new CommitStore(this);
     this.ops = new OpsStore(this);
   }
@@ -127,6 +156,7 @@ export class RepoStore extends Store<RepoState> {
     if (snap) void call('release_snapshot', { snapshotId: snap.snapshotId }).catch(() => {});
     this.state = { ...this.state, snapshot: null, layout: null, selection: EMPTY_SELECTION, dialog: null, diff: null, scrollRequest: null, toast: null, loading: false };
     this.metaCache.clear(); this.metaInflight.clear(); this.sigCache.clear(); this.sigRequested.clear();
+    this.dialogQueue = [];
     this.commit.dispose();
     this.ops.dispose();
   }
@@ -143,8 +173,23 @@ export class RepoStore extends Store<RepoState> {
   };
   dismissToast = (): void => { clearTimeout(this.toastTimer); this.set({ toast: null }); };
   showError = (e: unknown): void => { recordError(e); this.showToast('error', toAppError(e).message); };
-  openDialog = (d: DialogState): void => { this.set({ dialog: d }); };
-  closeDialog = (): void => { this.set({ dialog: null }); };
+  /**
+   * Open a dialog. A dialog that is already open is never replaced (a late async confirm must not swap the text
+   * under the user's cursor): the new one waits and is shown when the current one closes. At most 3 wait; the
+   * rest are dropped with a toast.
+   */
+  openDialog = (d: DialogState): void => {
+    if (this.disposed) return;
+    if (!this.state.dialog) { this.set({ dialog: d }); return; }
+    if (this.dialogQueue.length >= 3) { this.showToast('info', t('store.dialogDropped')); return; }
+    this.dialogQueue.push(d);
+  };
+  closeDialog = (): void => { this.set({ dialog: this.dialogQueue.shift() ?? null }); };
+  /** Close `d` only if it is still the open dialog (late closes after an await must not close a newer one). */
+  closeDialogIf = (d: DialogState | null): void => {
+    if (d && this.state.dialog === d) this.closeDialog();
+    else if (d) this.dialogQueue = this.dialogQueue.filter((x) => x !== d);
+  };
   openDiff = (file: ChangedFile): void => { this.set({ diff: file }); };
   closeDiff = (): void => { this.set({ diff: null }); };
 
@@ -235,6 +280,7 @@ export class RepoStore extends Store<RepoState> {
         metaVersion: this.state.metaVersion + 1,
       });
       applied = true;
+      if (this.followHead && !this.state.workingSelected) { this.followHead = false; this.selectHead(); }
       // Only now is the old snapshot unreferenced.
       if (old) void call('release_snapshot', { snapshotId: old.snapshotId }).catch(() => {});
       void call('get_authors', { snapshotId: snapshot.snapshotId })
@@ -312,18 +358,37 @@ export class RepoStore extends Store<RepoState> {
 
   // ───────────── selection actions ─────────────
   selectRowAt = (row: number, mods: { shift: boolean; toggle: boolean }): void => {
+    this.followHead = false;
     this.set({ selection: selectRow(this.state.selection, row, mods, rowMapOf(this.state.layout)), workingSelected: false });
   };
   /** Select the "Uncommitted changes" row (clears the commit selection). */
-  selectWorking = (): void => { this.set({ workingSelected: true, selection: EMPTY_SELECTION }); };
+  selectWorking = (): void => { this.followHead = false; this.set({ workingSelected: true, selection: EMPTY_SELECTION }); };
+  /**
+   * The working tree became clean while its row was selected: fall back to the HEAD commit, now and again when the
+   * next log load lands (a commit / discard reloads the log, and HEAD may have moved).
+   */
+  leaveWorking = (): void => {
+    if (!this.state.workingSelected) return;
+    this.set({ workingSelected: false });
+    this.followHead = true;
+    this.selectHead();
+  };
+  private selectHead(): void {
+    const { snapshot, layout } = this.state;
+    if (!snapshot || !layout || snapshot.headIndex == null || snapshot.headIndex < 0) return;
+    const row = layout.rowOf(snapshot.headIndex);
+    if (row < 0) return;
+    this.set({ selection: selectRow(EMPTY_SELECTION, row, { shift: false, toggle: false }, layout), scrollRequest: { row, nonce: nonce++ } });
+  }
   setHighlightKey = (key: string | null): void => { if (key !== this.state.highlightKey) this.set({ highlightKey: key }); };
   moveFocus = (row: number, extend: boolean): void => {
     const layout = this.state.layout;
     if (!layout) return;
     const sel = moveFocusTo(this.state.selection, row, extend, layout);
+    this.followHead = false;
     this.set({ selection: sel, workingSelected: false, scrollRequest: sel.focus != null ? { row: layout.rowOf(sel.focus), nonce: nonce++ } : this.state.scrollRequest });
   };
-  selectAllRows = (): void => { this.set({ selection: selectAll(rowMapOf(this.state.layout)), workingSelected: false }); };
+  selectAllRows = (): void => { this.followHead = false; this.set({ selection: selectAll(rowMapOf(this.state.layout)), workingSelected: false }); };
 
   /** Select a commit by snapshot index and scroll to it. Returns false if hidden / not loaded. */
   jumpToCommitIndex = (ci: number | null): boolean => {
@@ -331,6 +396,7 @@ export class RepoStore extends Store<RepoState> {
     if (ci == null || !layout) return false;
     const row = layout.rowOf(ci);
     if (row < 0) { this.showToast('info', t('store.hiddenByFilter')); return false; }
+    this.followHead = false;
     this.set({ selection: selectRow(EMPTY_SELECTION, row, { shift: false, toggle: false }, layout), workingSelected: false, scrollRequest: { row, nonce: nonce++ } });
     return true;
   };
@@ -391,12 +457,30 @@ export class RepoStore extends Store<RepoState> {
   };
 
   // ───────────── git operations ─────────────
-  /** Progress toast → op → info toast + reload. Shared by ui-commit / ui-ops write ops. */
-  async runOp(label: string, fn: (repoPath: string) => Promise<{ message: string }>): Promise<{ ok: true } | { ok: false; error: AppError }> {
+  /** A keyed op (fetch / pull / push) is queued or running. */
+  isRunning = (key: OpKey): boolean => this.state.runningOps.includes(key);
+
+  /**
+   * Progress toast → op (in the repo's write queue) → info toast + reload. Shared by ui-commit / ui-ops write ops.
+   * With `key`, a second call while the first is queued / running is ignored (returns ok without running).
+   */
+  async runOp(label: string, fn: (repoPath: string) => Promise<{ message: string }>, key?: OpKey): Promise<{ ok: true } | { ok: false; error: AppError }> {
+    if (key) {
+      if (this.isRunning(key)) return { ok: true };
+      this.set({ runningOps: [...this.state.runningOps, key] });
+    }
+    try {
+      return await this.runOpInner(label, fn);
+    } finally {
+      if (key && !this.disposed) this.set({ runningOps: this.state.runningOps.filter((k) => k !== key) });
+    }
+  }
+
+  private async runOpInner(label: string, fn: (repoPath: string) => Promise<{ message: string }>): Promise<{ ok: true } | { ok: false; error: AppError }> {
     const epoch = this.epoch;
     this.showToast('progress', label);
     try {
-      const r = await fn(this.path);
+      const r = await this.queue.run(() => fn(this.path));
       if (this.stale(epoch)) return { ok: true };
       const msg = r.message.trim().split('\n').pop()?.slice(0, 200) || t('store.done');
       this.showToast('info', msg);
@@ -437,11 +521,11 @@ export class RepoStore extends Store<RepoState> {
   };
 
   fetchAll = async (): Promise<void> => {
-    this.failToast(await this.runOp(t('store.fetching'), (repoPath) => call('fetch', { repoPath, remote: null })));
+    this.failToast(await this.runOp(t('store.fetching'), (repoPath) => call('fetch', { repoPath, remote: null }), 'fetch'));
   };
 
   pull = async (mode: PullMode = 'ffOnly'): Promise<void> => {
-    const o = await this.runOp(t('store.pulling'), (repoPath) => call('pull', { repoPath, mode }));
+    const o = await this.runOp(t('store.pulling'), (repoPath) => call('pull', { repoPath, mode }), 'pull');
     if (o.ok) return;
     if (o.error.code === 'nonFastForward') {
       this.openDialog({
@@ -449,6 +533,8 @@ export class RepoStore extends Store<RepoState> {
         title: t('store.ff.title'),
         message: t('store.ff.msg'),
         confirmLabel: t('common.rebase'),
+        // Appears after a network round trip: a stray Enter must not pick rebase.
+        noAutoFocus: true,
         onConfirm: () => { this.closeDialog(); void this.pull('rebase'); },
         alt: { label: t('common.merge'), onClick: () => { this.closeDialog(); void this.pull('merge'); } },
       });

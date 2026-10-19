@@ -1,5 +1,6 @@
 // Update dialog: available (version + notes) -> installing (progress) -> restart; also up-to-date / offline / failed.
-import { useEffect } from 'react';
+import { useRef } from 'react';
+import { useLayer } from '../common/layers';
 import './app.css';
 import { t } from '../../i18n';
 import { appUi, useAppUi } from './appUi';
@@ -8,11 +9,9 @@ const mb = (b: number): string => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFix
 
 export function UpdateDialog() {
   const u = useAppUi((s) => s.update);
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') appUi.dismissUpdate(); };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, []);
+  const ref = useRef<HTMLDivElement>(null);
+  // Escape layer only while shown; ignored while installing.
+  useLayer(() => { if (u.kind !== 'installing') appUi.dismissUpdate(); }, { modal: true, enabled: u.kind !== 'idle' });
   if (u.kind === 'idle') return null;
 
   const info = u.kind === 'available' || u.kind === 'installing' ? u.info : u.kind === 'error' ? u.info : null;
@@ -68,7 +67,7 @@ export function UpdateDialog() {
   }
   return (
     <div className="modal-backdrop" onMouseDown={busy ? undefined : appUi.dismissUpdate}>
-      <div className="modal st-modal narrow" role="dialog" aria-label={t('update.title')} onMouseDown={(e) => e.stopPropagation()}>
+      <div ref={ref} className="modal st-modal narrow" role="dialog" aria-modal="true" aria-label={t('update.title')} onMouseDown={(e) => e.stopPropagation()}>
         <h3>{t('update.title')}</h3>
         {body}
         {actions && <div className="modal-actions">{actions}</div>}

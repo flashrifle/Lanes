@@ -1,6 +1,7 @@
 // Settings dialog (⌘, / menu-action 'settings'). Simple controls save immediately; text fields commit on blur/Enter,
 // the git path only after validate_git_path succeeds. Owned by ui-app.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useModal } from '../common/layers';
 import './app.css';
 import { call, toAppError } from '../../api';
 import { t } from '../../i18n';
@@ -41,11 +42,6 @@ export function SettingsDialog({ onToast }: { onToast: (kind: 'error' | 'info', 
     });
   };
 
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') appUi.closeSettings(); };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, []);
 
   useEffect(() => {
     call('get_diagnostics', {}).then(setDiag).catch(() => {});
@@ -87,14 +83,19 @@ export function SettingsDialog({ onToast }: { onToast: (kind: 'error' | 'info', 
     const v = editor.trim() || null;
     if (v !== s.externalEditor) patch({ externalEditor: v });
   };
+  const editorDirty = (editor.trim() || null) !== s.externalEditor;
+  // Close (button, Escape, backdrop) commits a pending editor edit first, so it is never silently dropped.
+  const close = () => { commitEditor(); appUi.closeSettings(); };
+  const ref = useRef<HTMLDivElement>(null);
+  useModal(ref, close);
 
   const gr = gitCheck.result;
   return (
-    <div className="modal-backdrop" onMouseDown={appUi.closeSettings}>
-      <div className="modal st-modal" role="dialog" aria-label={t('settings.title')} onMouseDown={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop" onMouseDown={close}>
+      <div ref={ref} className="modal st-modal" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t('settings.title')} onMouseDown={(e) => e.stopPropagation()}>
         <div className="st-head">
           <h3>{t('settings.title')}</h3>
-          <button className="icon-btn" aria-label={t('settings.close')} onClick={appUi.closeSettings}>×</button>
+          <button className="icon-btn" aria-label={t('settings.close')} onClick={close}>×</button>
         </div>
         <div className="st-body">
           <Row label={t('settings.language')}>
@@ -153,13 +154,14 @@ export function SettingsDialog({ onToast }: { onToast: (kind: 'error' | 'info', 
               onBlur={commitEditor}
               onKeyDown={(e) => { if (e.key === 'Enter') { commitEditor(); (e.target as HTMLInputElement).blur(); } }}
             />
+            {editorDirty && <div className="st-hint" aria-live="polite">{t('settings.editor.unsaved')}</div>}
           </Row>
 
           <div className="st-sep" />
           <Row label={t('settings.updates')}>
             <div className="st-inline">
               <label className="st-check"><input type="checkbox" checked={s.checkForUpdates} onChange={(e) => patch({ checkForUpdates: e.target.checked })} />{t('settings.updates.auto')}</label>
-              <button className="btn small" onClick={() => { appUi.closeSettings(); void appUi.check(false); }}>{t('settings.updates.now')}</button>
+              <button className="btn small" onClick={() => { close(); void appUi.check(false); }}>{t('settings.updates.now')}</button>
             </div>
           </Row>
           <Row label={t('settings.menuBar')}>
@@ -186,7 +188,7 @@ export function SettingsDialog({ onToast }: { onToast: (kind: 'error' | 'info', 
             className="btn small"
             onClick={() => { openReportIssue().catch((e) => onToast('error', t('report.openFail', { msg: toAppError(e).message }))); }}
           >{t('settings.reportIssue')}</button>
-          <button className="btn primary" onClick={appUi.closeSettings}>{t('settings.close')}</button>
+          <button className="btn primary" onClick={close}>{t('settings.close')}</button>
         </div>
       </div>
     </div>

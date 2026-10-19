@@ -43,6 +43,7 @@ export const opsKo = {
   'reset.hard': 'Hard',
   'reset.hardHint': 'HEAD, 스테이징, 파일 모두 초기화',
   'reset.hardWarn': (p: Params) => `커밋하지 않은 로컬 변경 사항이 모두 삭제되며 되돌릴 수 없습니다. 현재 HEAD(${p.cur})의 커밋은 리플로그에서 복구할 수 있습니다.`,
+  'reset.hardLost': (p: Params) => `커밋하지 않은 변경이 있는 파일 ${Number(p.n).toLocaleString('ko-KR')}개의 변경 내용이 사라집니다.`,
   'reset.reflogHint': '복구: 리플로그에서 이전 커밋을 찾아 다시 리셋하세요.',
   'reset.typeToConfirm': (p: Params) => `계속하려면 “${p.word}”를 입력하세요.`,
   'reset.run': '리셋',

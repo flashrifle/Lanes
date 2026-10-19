@@ -93,6 +93,37 @@ const cases: Case[] = [
     mode: 'unstage',
     pick: (_l, h) => h === 1,
   },
+  {
+    // first hunk (+2) omitted: the reverse anchor must subtract nothing, the diff's newStart is already right
+    name: 'unstage-multi-hunk-third-only',
+    old: twentyFive,
+    new: twentyFive.replace('line 2\n', 'line 2\nX1\nX2\n').replace('line 12\n', 'line twelve\n').replace('line 22\n', ''),
+    mode: 'unstage',
+    pick: (_l, h) => h === 2,
+  },
+  {
+    // first hunk partially selected (1 of 2 adds), then the third
+    name: 'unstage-multi-hunk-partial-first-and-third',
+    old: twentyFive,
+    new: twentyFive.replace('line 2\n', 'line 2\nX1\nX2\n').replace('line 12\n', 'line twelve\n').replace('line 22\n', 'Y\n'),
+    mode: 'unstage',
+    pick: (l, h) => (h === 0 && l.text === 'X1') || h === 2,
+  },
+  {
+    name: 'discard-multi-hunk-second-only',
+    old: twentyFive,
+    new: twentyFive.replace('line 2\n', 'line 2\nX1\nX2\n').replace('line 12\n', 'line twelve\n').replace('line 22\n', ''),
+    mode: 'discard',
+    pick: (_l, h) => h === 1,
+  },
+  {
+    // first hunk deletes 2 lines and is partially selected; later hunks shift on the new side
+    name: 'discard-multi-hunk-partial-del-then-add',
+    old: twentyFive,
+    new: twentyFive.replace('line 3\nline 4\n', '').replace('line 15\n', 'line 15\nZ1\n').replace('line 23\n', 'line 23\nZ2\n'),
+    mode: 'discard',
+    pick: (l, h) => (h === 0 && l.text === 'line 4') || (h === 2),
+  },
   { name: 'unstage-noeol-new', old: 'a\nb\nc\n', new: 'a\nb\nc\nz', mode: 'unstage', pick: () => true },
   { name: 'discard-mixed', old: base10, new: base10.replace('line 3\n', 'L3\n').replace('line 8\n', 'line 8\nadded\n'), mode: 'discard', pick: (l) => l.text === 'added' || l.text === 'line 3' },
   { name: 'discard-crlf', old: 'a\r\nb\r\n', new: 'a\r\nB\r\n', mode: 'discard', pick: (l) => l.kind === 'add' },

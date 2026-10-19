@@ -6,6 +6,7 @@ import { t } from '../../i18n';
 import { EVENT_MENU_ACTION, type MenuActionEvent } from '../../types';
 import { Toast } from '../dialogs/Toast';
 import { hasMod } from '../platform';
+import { hasModalLayer } from '../common/layers';
 import type { ToastState } from '../state/repoStore';
 import { appUi, useAppUi } from './appUi';
 import { openReportIssue } from './openReport';
@@ -49,7 +50,7 @@ export function AppOverlays() {
   // ⌘,
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (hasMod(e) && !e.shiftKey && !e.altKey && e.key === ',') { e.preventDefault(); appUi.openSettings(); }
+      if (hasMod(e) && !e.shiftKey && !e.altKey && e.key === ',' && !hasModalLayer()) { e.preventDefault(); appUi.openSettings(); }
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);

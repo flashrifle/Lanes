@@ -33,6 +33,8 @@ export class OpsStore extends Store<OpsState> {
   // ───────────── dialogs ─────────────
   open = (dialog: OpsDialog): void => { this.set({ dialog }); };
   close = (): void => { this.set({ dialog: { kind: 'none' } }); };
+  /** Close only if `d` is still the open dialog (a late close after an await must not close a newer dialog). */
+  closeIf = (d: OpsDialog): void => { if (this.state.dialog === d) this.close(); };
 
   // ───────────── outcome / error plumbing ─────────────
   /** Toast for a failed op, with a plain explanation for the well-known codes. */

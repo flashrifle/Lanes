@@ -10,7 +10,7 @@ import { t } from '../../i18n';
 import { ContextMenu, useContextMenu, type MenuItem } from '../common/ContextMenu';
 import { FileIcon, Icon } from '../common/Icons';
 import { fileExt } from '../details/fileTree';
-import { formatCommitDate } from '../format/date';
+import { CommitDate } from '../format/CommitDate';
 import { SplitPane } from '../layout/SplitPane';
 import { hasMod, IS_MAC } from '../platform';
 import { useStoreState } from '../state/createStore';
@@ -90,7 +90,8 @@ function ChangesSection() {
     for (const e of entries) m.get(e.group)!.push(e);
     return m;
   }, [entries]);
-  const selected = useMemo(() => entries.filter((e) => sel.has(e.key)), [entries, sel]);
+  // Rows inside collapsed groups are not acted on (Delete / context menu / conflict buttons): the user can't see them.
+  const selected = useMemo(() => entries.filter((e) => sel.has(e.key) && !collapsed.has(e.group)), [entries, sel, collapsed]);
   const operation = status?.operation ?? null;
 
   // ── actions ──
@@ -110,7 +111,7 @@ function ChangesSection() {
     if (list.every((e) => e.group === 'staged')) void cs.unstage(unique(list.flatMap((e) => (e.file.oldPath ? [e.file.path, e.file.oldPath] : [e.file.path]))));
     else void cs.stage(unique(list.filter((e) => e.group !== 'staged').map((e) => e.file.path)));
   };
-  const actOn = (e: WorkingEntry) => (sel.has(e.key) ? selected : [e]);
+  const actOn = (e: WorkingEntry) => (selected.some((x) => x.key === e.key) ? selected : [e]);
   const conflictPaths = (es: WorkingEntry[]) => unique(es.filter((e) => e.group === 'conflicts').map((e) => e.file.path));
 
   // ── selection ──
@@ -186,8 +187,8 @@ function ChangesSection() {
     if (staged.length) items.push({ label: t('stage.menu.unstage', { n: staged.length }), onClick: () => toggle(staged) });
     if (conflicts.length) {
       items.push({ separator: true });
-      items.push({ label: conflictSideLabel('ours', operation), onClick: () => void cs.resolveConflict(conflicts, 'ours') });
-      items.push({ label: conflictSideLabel('theirs', operation), onClick: () => void cs.resolveConflict(conflicts, 'theirs') });
+      items.push({ label: conflictSideLabel('ours', operation) + '…', onClick: () => cs.confirmResolveConflict(conflicts, 'ours') });
+      items.push({ label: conflictSideLabel('theirs', operation) + '…', onClick: () => cs.confirmResolveConflict(conflicts, 'theirs') });
       items.push({ label: t('conflict.markResolved'), onClick: () => void cs.markResolved(conflicts) });
     }
     if (discardable.length) {
@@ -238,9 +239,10 @@ function ChangesSection() {
           <span className="lc-group-label">{groupLabel[g]}</span>
           <span className="muted">{list.length}</span>
           <span className="grow" />
-          {g === 'conflicts' && (
-            <ConflictActions store={cs} paths={conflictPaths(selected).length ? conflictPaths(selected) : list.map((e) => e.file.path)} op={operation} />
-          )}
+          {g === 'conflicts' && (() => {
+            const picked = conflictPaths(selected);
+            return <ConflictActions store={cs} paths={picked.length ? picked : unique(list.map((e) => e.file.path))} all={picked.length === 0} op={operation} />;
+          })()}
         </div>
         {open && list.map((e) => renderEntry(e))}
       </div>
@@ -271,7 +273,7 @@ function ChangesSection() {
             tabIndex={-1}
             checked={e.group === 'staged'}
             aria-label={e.group === 'staged' ? t('stage.unstageFile', { name }) : t('stage.stageFile', { name })}
-            onChange={() => toggle(sel.has(e.key) ? selected.filter((x) => x.group === e.group) : [e])}
+            onChange={() => toggle(selected.some((x) => x.key === e.key) ? selected.filter((x) => x.group === e.group) : [e])}
           />
         )}
         <FileIcon ext={fileExt(name)} />
@@ -325,13 +327,18 @@ function ChangesSection() {
   );
 }
 
-function ConflictActions({ store, paths, op }: { store: CommitStore; paths: string[]; op: WorkingTreeStatus['operation'] }) {
+/**
+ * Header buttons of the Conflicts group. They act on the selected conflict rows; with none selected they act on every
+ * conflict and say so ("… all (N)"). Accept ours / theirs always confirms first (it overwrites the files).
+ */
+function ConflictActions({ store, paths, all, op }: { store: CommitStore; paths: string[]; all: boolean; op: WorkingTreeStatus['operation'] }) {
   const stop = (ev: MouseEvent) => ev.stopPropagation();
+  const label = (short: string) => (all ? t('conflict.allLabel', { label: short, n: paths.length }) : t('conflict.selLabel', { label: short, n: paths.length }));
   return (
     <span className="lc-conflict-actions" onMouseDown={stop}>
-      <button className="btn small" title={conflictSideLabel('ours', op)} onClick={() => void store.resolveConflict(paths, 'ours')}>{conflictSideLabel('ours', op, true)}</button>
-      <button className="btn small" title={conflictSideLabel('theirs', op)} onClick={() => void store.resolveConflict(paths, 'theirs')}>{conflictSideLabel('theirs', op, true)}</button>
-      <button className="btn small" onClick={() => void store.markResolved(paths)}>{t('conflict.markResolvedShort')}</button>
+      <button className="btn small" title={conflictSideLabel('ours', op)} onClick={() => store.confirmResolveConflict(paths, 'ours')}>{label(conflictSideLabel('ours', op, true))}</button>
+      <button className="btn small" title={conflictSideLabel('theirs', op)} onClick={() => store.confirmResolveConflict(paths, 'theirs')}>{label(conflictSideLabel('theirs', op, true))}</button>
+      <button className="btn small" onClick={() => void store.markResolved(paths)}>{label(t('conflict.markResolvedShort'))}</button>
     </span>
   );
 }
@@ -343,6 +350,10 @@ function StashSection() {
   const loading = useStoreState(cs, (s) => s.stashLoading);
   const [open, setOpen] = useState(false);
   useEffect(() => { void cs.loadStashes(); }, [cs]);
+  useEffect(() => {
+    cs.setStashPanelOpen(open);
+    return () => cs.setStashPanelOpen(false);
+  }, [cs, open]);
   const n = stashes?.length ?? 0;
   return (
     <div className={'lc-stash' + (open ? ' open' : '')}>
@@ -370,7 +381,7 @@ function StashRow({ s, store }: { s: StashEntry; store: CommitStore }) {
     <div className="lc-stash-row" title={s.message}>
       <span className="lc-stash-ref">{`stash@{${s.index}}`}</span>
       <span className="lc-stash-msg">{s.message}</span>
-      <span className="muted lc-stash-time">{formatCommitDate(s.time)}</span>
+      <span className="muted lc-stash-time"><CommitDate ts={s.time} /></span>
       <span className="lc-stash-btns">
         <button className="btn small" onClick={() => void store.applyStash(s, false)} title={t('stash.applyTip')}>{t('stash.apply')}</button>
         <button className="btn small" onClick={() => void store.applyStash(s, true)} title={t('stash.popTip')}>{t('stash.pop')}</button>

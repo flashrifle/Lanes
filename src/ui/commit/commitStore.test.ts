@@ -23,6 +23,7 @@ function fakeRepo() {
     openDialog: vi.fn(),
     closeDialog: vi.fn(),
     selectWorking: vi.fn(),
+    leaveWorking: vi.fn(),
   };
   return repo;
 }
@@ -154,3 +155,70 @@ describe('CommitStore write ops', () => {
     expect(call.mock.calls.filter((c) => c[0] === 'control_operation')).toHaveLength(1);
   });
 });
+
+describe('CommitStore safety', () => {
+  const file = (path: string, over: object = {}) => ({ path, oldPath: null, staged: null, unstaged: 'modified', untracked: false, conflict: null, submodule: false, ...over });
+
+  it('accept ours / theirs always confirms (danger) with the file names and a warning, and runs only on confirm', async () => {
+    call.mockImplementation(() => Promise.resolve(status()));
+    const repo = fakeRepo();
+    const cs = new CommitStore(repo as unknown as RepoStore, noSleep);
+    cs.confirmResolveConflict(['a.txt', 'b.txt', 'a.txt'], 'theirs');
+    expect(call.mock.calls.some((c) => c[0] === 'resolve_conflict')).toBe(false);
+    const d = repo.openDialog.mock.calls[0][0];
+    expect(d.danger).toBe(true);
+    expect(d.details).toEqual(['a.txt', 'b.txt']);
+    expect(d.warning).toBeTruthy();
+    expect(d.title).toContain('2');
+    d.onConfirm();
+    await flush(); await flush();
+    expect(call.mock.calls.find((c) => c[0] === 'resolve_conflict')![1]).toEqual({ repoPath: '/repo', paths: ['a.txt', 'b.txt'], side: 'theirs' });
+  });
+
+  it('confirm lists are capped with "and N more"', async () => {
+    const { confirmList } = await import('./commitStore');
+    const names = Array.from({ length: 60 }, (_, i) => `f${i}`);
+    const l = confirmList(names, 50);
+    expect(l).toHaveLength(51);
+    expect(l[50]).toMatch(/10/);
+  });
+
+  it('a clean tree leaves the working row', async () => {
+    call.mockImplementation(() => Promise.resolve(status({ files: [] })));
+    const repo = fakeRepo();
+    const cs = new CommitStore(repo as unknown as RepoStore, noSleep);
+    await cs.refreshStatus();
+    expect(repo.leaveWorking).toHaveBeenCalled();
+    call.mockImplementation(() => Promise.resolve(status({ files: [file('x')] as never })));
+    repo.leaveWorking.mockClear();
+    await cs.refreshStatus();
+    expect(repo.leaveWorking).not.toHaveBeenCalled();
+  });
+
+  it('stashes are re-listed only while the stash panel is open, once per refresh burst, and errors toast once', async () => {
+    let resolveStatus!: (s: WorkingTreeStatus) => void;
+    call.mockImplementation((cmd: string) => {
+      if (cmd === 'get_status') return new Promise((r) => { resolveStatus = r; });
+      if (cmd === 'list_stashes') return Promise.reject({ code: 'gitFailed', message: 'x', stderr: null });
+      return Promise.resolve(null);
+    });
+    const repo = fakeRepo();
+    const cs = new CommitStore(repo as unknown as RepoStore, noSleep);
+    const stashCalls = () => call.mock.calls.filter((c) => c[0] === 'list_stashes').length;
+    // closed panel: no list_stashes on refresh
+    const p0 = cs.refreshStatus(); resolveStatus(status()); await p0;
+    expect(stashCalls()).toBe(0);
+    cs.setStashPanelOpen(true);
+    await flush();
+    expect(stashCalls()).toBe(1);
+    // a burst of three refreshes → one re-list
+    const p1 = cs.refreshStatus(); void cs.refreshStatus(); void cs.refreshStatus();
+    resolveStatus(status()); await flush(); resolveStatus(status()); await p1;
+    expect(stashCalls()).toBe(2);
+    expect(repo.failToast).toHaveBeenCalledTimes(1); // the second failure does not toast again
+    cs.setStashPanelOpen(false);
+    const p2 = cs.refreshStatus(); resolveStatus(status()); await p2;
+    expect(stashCalls()).toBe(2);
+  });
+});
+

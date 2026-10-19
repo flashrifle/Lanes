@@ -71,7 +71,10 @@ buildPatch(diff: FileDiff, selected: ReadonlySet<string> /* "h:l" = hunk index:l
 - **Forward patch (stage):** drop an unselected `add`; turn an unselected `del` into context.
 - **Reverse patch (unstage / discard):** build it in the diff's own direction; the backend applies it with `--reverse`. Turn an unselected `add` into context; drop an unselected `del`.
 - **`noNewline` line:** emit it only if the line before it was emitted.
-- **Hunks:** omit a hunk with no selected change. Recompute the counts, and set `newStart = oldStart + cumulative delta of emitted hunks`.
+- **Hunks:** omit a hunk with no selected change and recompute the counts. Let `delta` = cumulative `newCount - oldCount` of the hunks emitted before this one, and let a side's *first* line be `start + 1` when that side has 0 lines, else `start`.
+  - stage: keep `oldStart`; `newFirst = oldFirst + delta`.
+  - unstage / discard (reverse): `first = newFirst(diff hunk) - delta`, and both sides start at `first` (the patch is applied with `--reverse` against the diff's new side, so it must be anchored there).
+  - Then a side with 0 emitted lines is written as `first - 1`.
 - **Empty selection:** return `null`.
 - **When line-level ops are allowed:** only if `!binary && !truncated && oldPath == null && oldMode == newMode`, and the file is *modified* on that side. Added, deleted, untracked, conflicted and submodule files get file-level ops only.
 - **Request mapping:**
@@ -80,7 +83,7 @@ buildPatch(diff: FileDiff, selected: ReadonlySet<string> /* "h:l" = hunk index:l
   - discard = unstaged diff, `'worktree'`, `reverse true`
 - **Backend:** checks the path against the header paths, runs `git apply --check`, then `git apply [--cached] [--reverse] --recount --whitespace=nowarn -` over stdin.
 - **On `patchFailed`:** the UI re-fetches the diff and offers to stage the whole file.
-- **Ordering:** the commit store serializes ops per repo with a queue, so fast clicking doesn't hit `busy`.
+- **Ordering:** every write op of a repo (RepoStore.runOp and the commit store's stage / commit / stash ops) runs in one per-repo queue (`RepoStore.queue`) with one retry on `busy`, so fast clicking doesn't hit `busy` and a checkout can't race a stage.
 
 ### 1.2 Coordinator decisions
 - **Hook PATH.** Git hooks (husky, npx) fail under the GUI's minimal PATH. At startup the backend resolves the login-shell PATH once: a fixed command with no user input, a 2 s timeout, and a fallback of `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`. It passes this as `PATH` to hook-running write ops (commit, merge, rebase, cherry-pick, revert, push).

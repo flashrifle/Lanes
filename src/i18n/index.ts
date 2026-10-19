@@ -46,13 +46,13 @@ export function useLang(): Lang {
 }
 
 /**
- * Root wrapper: remounts its subtree when the language or the date format changes, so every `t()` /
- * formatter call in already-mounted components picks up the new value. Module stores survive the remount.
+ * Root wrapper: remounts its subtree when the language changes, so every `t()` call in already-mounted
+ * components picks up the new value. Module stores survive the remount. The date format does not remount:
+ * date text follows it live (`CommitDate` / `useDateFormat` in src/ui/format/CommitDate.tsx).
  */
 export function LangRoot({ children }: { children?: ReactNode }) {
   const l = useLang();
-  const df = useSyncExternalStore(subscribeSettings, () => getSettings().dateFormat);
-  return createElement(Fragment, { key: `${l}|${df}` }, children);
+  return createElement(Fragment, { key: l }, children);
 }
 
 /** Look up a message; entries may be plain strings or functions of `params`. */

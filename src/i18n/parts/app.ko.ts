@@ -26,6 +26,7 @@ export const appKo = {
   'settings.git.applied': '적용되었습니다',
   'settings.editor': '외부 편집기',
   'settings.editor.ph': '앱 이름 또는 .app 경로 (비우면 기본 앱)',
+  'settings.editor.unsaved': '저장되지 않음 — Enter를 누르거나 창을 닫으면 저장됩니다',
   'settings.editor.hint': '예: Visual Studio Code, /Applications/Xcode.app',
   'settings.updates': '업데이트',
   'settings.updates.auto': '실행할 때 업데이트 확인',

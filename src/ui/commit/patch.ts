@@ -55,8 +55,10 @@ export function headerPath(prefix: 'a/' | 'b/', path: string): string {
 
 /**
  * Build the patch, or null when no add/del line is selected.
- * Hunks without a selected change are omitted; counts are recomputed; oldStart is kept and
- * newStart = oldStart + cumulative (newLines - oldLines) of the hunks emitted before it
+ * Hunks without a selected change are omitted and counts are recomputed. With delta = cumulative
+ * (newCount - oldCount) of the emitted hunks before this one:
+ *  - stage:   oldStart is kept, newStart = oldStart + delta
+ *  - reverse: first = newStart(diff) - delta, and both sides start at `first`
  * (with the unified-diff convention that a side with 0 lines names the line before the hunk).
  */
 export function buildPatch(diff: FileDiff, selected: ReadonlySet<string>, mode: PatchMode): string | null {
@@ -96,11 +98,22 @@ export function buildPatch(diff: FileDiff, selected: ReadonlySet<string>, mode: 
     });
 
     if (!anySelected) return;
-    // First line position on the old side (a 0-line side's start names the line before the hunk).
-    const oldFirst = h.oldLines === 0 ? h.oldStart + 1 : h.oldStart;
-    const newFirst = oldFirst + delta;
-    const oldStart = oldCount === 0 ? oldFirst - 1 : oldFirst;
-    const newStart = newCount === 0 ? newFirst - 1 : newFirst;
+    // First line position (a 0-line side's start names the line before the hunk).
+    let oldStart: number;
+    let newStart: number;
+    if (reverse) {
+      // The patch is applied with --reverse against the diff's NEW side: its "+" side must match the target
+      // as it is, so anchor on newStart. The emitted hunks before this one shift the "-" side by -delta,
+      // and both sides of this hunk start at the same line (the target before/after differ only inside it).
+      const first = (h.newLines === 0 ? h.newStart + 1 : h.newStart) - delta;
+      oldStart = oldCount === 0 ? first - 1 : first;
+      newStart = newCount === 0 ? first - 1 : first;
+    } else {
+      const oldFirst = h.oldLines === 0 ? h.oldStart + 1 : h.oldStart;
+      const newFirst = oldFirst + delta;
+      oldStart = oldCount === 0 ? oldFirst - 1 : oldFirst;
+      newStart = newCount === 0 ? newFirst - 1 : newFirst;
+    }
     body.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`);
     for (const s of lines) body.push(s);
     delta += newCount - oldCount;

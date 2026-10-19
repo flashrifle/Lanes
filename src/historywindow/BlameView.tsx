@@ -5,7 +5,8 @@ import { call, toAppError } from '../api';
 import { displayCols } from '../diffwindow/align';
 import type { BlameCommit, BlameLine, BlameResult, LineRange } from '../types';
 import { Tooltip } from '../ui/common/Tooltip';
-import { formatCommitDate, formatFullDate } from '../ui/format/date';
+import { formatFullDate } from '../ui/format/date';
+import { CommitDate } from '../ui/format/CommitDate';
 import { colorOf } from '../ui/log/palette';
 import { ageBuckets, buildBlameRuns, hashColorIndex, shortAuthor } from './blame';
 import { clickLine, inRange, rangeFromDomSelection, rangeOf, type LineSel } from './lineSelection';
@@ -161,7 +162,7 @@ function BlameBody({ data, focusLine, selectedHash, onPick, onContext, onLineMen
                 <>
                   <span className="hw-g-hash">{c.hash.slice(0, 8)}</span>
                   <span className="hw-g-author">{shortAuthor(c.authorName)}</span>
-                  <span className="hw-g-date">{formatCommitDate(c.authorTime)}</span>
+                  <span className="hw-g-date"><CommitDate ts={c.authorTime} /></span>
                 </>
               );
             } else if (start) {

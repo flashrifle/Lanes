@@ -20,7 +20,7 @@ export function TabBar() {
             key={tab.id}
             className={'tab' + (active ? ' active' : '')}
             onMouseDown={(e) => {
-              if (e.button === 1) { e.preventDefault(); appStore.closeTab(tab.id); }
+              if (e.button === 1) { e.preventDefault(); appStore.requestCloseTab(tab.id); }
             }}
           >
             <Tooltip label={tab.path} shortcut={i < 9 ? modKey(String(i + 1)) : undefined}>
@@ -36,7 +36,7 @@ export function TabBar() {
               </button>
             </Tooltip>
             <Tooltip label={t('tabs.close')} shortcut={active ? modKey('W') : undefined}>
-              <button className="tab-close" onClick={() => appStore.closeTab(tab.id)}>
+              <button className="tab-close" onClick={() => appStore.requestCloseTab(tab.id)}>
                 <Icon name="close" size={10} />
               </button>
             </Tooltip>

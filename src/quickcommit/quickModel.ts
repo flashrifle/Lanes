@@ -56,10 +56,12 @@ export class QuickCommitModel extends Store<QuickState> {
   // ───────────── targeting ─────────────
   /**
    * Called for every `quick-commit-target`. A different repo resets everything; the same repo (window shown
-   * again) keeps the typed message and only refreshes the status.
+   * again) keeps the typed message and only refreshes the status. While a commit / push runs, a different repo is
+   * ignored: the running Commit & Push must finish (and show its result) for the repo it started on.
    */
   retarget(repoPath: string): Promise<void> {
     if (this.state.repoPath === repoPath) return this.refresh();
+    if (this.state.busy) return Promise.resolve();
     this.gen++;
     this.queue = Promise.resolve();
     this.pending = 0;

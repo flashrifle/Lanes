@@ -16,6 +16,7 @@ export function PushDialog({ localBranch }: { localBranch: string | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
   const [confirmForce, setConfirmForce] = useState(false);
+  const [mine] = useState(() => ops.getState().dialog);
 
   const load = useCallback(async (keepForm: boolean) => {
     try {
@@ -29,7 +30,7 @@ export function PushDialog({ localBranch }: { localBranch: string | null }) {
 
   if (loadErr || !preview || !form) {
     return (
-      <Modal title={t('push.title')} onClose={ops.close}>
+      <Modal title={t('push.title')} onClose={ops.close} busy={busy}>
         <p className={loadErr ? 'field-error' : 'muted'}>{loadErr ?? t('common.loading')}</p>
         <div className="modal-actions"><button className="btn" onClick={ops.close}>{t('common.cancel')}</button></div>
       </Modal>
@@ -41,12 +42,13 @@ export function PushDialog({ localBranch }: { localBranch: string | null }) {
   const forcePossible = canForce(preview, form) && !busy;
 
   const run = async (force: boolean) => {
+    if (busy) return;
     setBusy(true);
     setError(null);
     const request = buildPushRequest(preview, form, force);
-    const o = await store.runOp(t('push.running', { name: preview.localBranch }), (repoPath) => call('push', { repoPath, request }));
+    const o = await store.runOp(t('push.running', { name: preview.localBranch }), (repoPath) => call('push', { repoPath, request }), 'push');
     setBusy(false);
-    if (o.ok) { ops.close(); return; }
+    if (o.ok) { ops.closeIf(mine); return; }
     setConfirmForce(false);
     setError(o.error);
     if (o.error.code === 'staleLease') void load(true); // fresh remoteHash for the next attempt
@@ -62,7 +64,7 @@ export function PushDialog({ localBranch }: { localBranch: string | null }) {
     : null;
 
   return (
-    <Modal title={t('push.titleBranch', { name: preview.localBranch })} onClose={ops.close} wide onSubmit={() => void run(false)}>
+    <Modal title={t('push.titleBranch', { name: preview.localBranch })} onClose={ops.close} busy={busy} wide onSubmit={() => { if (ready) void run(false); }}>
       {preview.remotes.length === 0 ? (
         <p className="field-error">{t('push.noRemote')}</p>
       ) : (
@@ -126,7 +128,7 @@ export function PushDialog({ localBranch }: { localBranch: string | null }) {
           <button type="button" className="btn small ops-secondary" disabled={!forcePossible} title={t('push.forceTip')} onClick={() => setConfirmForce(true)}>{t('push.forceLease')}</button>
         )}
         <div className="grow" />
-        <button type="button" className="btn" onClick={ops.close}>{t('common.cancel')}</button>
+        <button type="button" className="btn" disabled={busy} onClick={ops.close}>{t('common.cancel')}</button>
         <button type="submit" className="btn primary" disabled={!ready}>{t('push.push')}</button>
       </div>
     </Modal>
