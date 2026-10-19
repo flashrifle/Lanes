@@ -1,6 +1,6 @@
 use lanes_lib::error::ErrorCode;
 use lanes_lib::git::refs::{Favorites, read_refs};
-use lanes_lib::git::{changes, diff, log, ops, repo};
+use lanes_lib::git::{changes, diff, file, log, ops, repo};
 use lanes_lib::models::*;
 use lanes_lib::snapshot::{self, SnapshotStore};
 use lanes_lib::state::AppState;
@@ -795,4 +795,67 @@ fn two_repos_watch_independently() {
     let ev = rx.recv_timeout(Duration::from_secs(5)).expect("event for B");
     assert_eq!(ev.repo_path, b.path());
     assert!(rx.recv_timeout(Duration::from_millis(900)).is_err(), "A's watcher must be stopped");
+}
+
+#[test]
+fn file_history_follows_rename_and_blame() {
+    let r = TestRepo::new();
+    let c1 = r.commit_file("a.txt", "one\ntwo\nthree\n", "create");
+    let c2 = r.commit_file("a.txt", "one\ntwo changed\nthree\n", "modify");
+    r.commit_file("other.txt", "x\n", "unrelated");
+    r.git(&["mv", "a.txt", "dir_b.txt"]);
+    r.git(&["commit", "-q", "-m", "rename"]);
+    let c3 = r.git(&["rev-parse", "HEAD"]);
+    let c4 = r.commit_file("dir_b.txt", "one\ntwo changed\nthree\nfour\n", "append");
+
+    let h = file::file_history(r.path(), "dir_b.txt", None).unwrap();
+    assert!(!h.truncated);
+    let hashes: Vec<&str> = h.entries.iter().map(|e| e.hash.as_str()).collect();
+    assert_eq!(hashes, vec![c4.as_str(), c3.as_str(), c2.as_str(), c1.as_str()]);
+    let e = &h.entries;
+    assert_eq!((e[0].status, e[0].path.as_str(), e[0].old_path.clone()), (FileStatus::Modified, "dir_b.txt", None));
+    assert_eq!((e[0].additions, e[0].deletions), (Some(1), Some(0)));
+    assert_eq!(e[1].status, FileStatus::Renamed);
+    assert_eq!(e[1].old_path.as_deref(), Some("a.txt"));
+    assert_eq!(e[1].path, "dir_b.txt");
+    assert_eq!(e[2].path, "a.txt");
+    assert_eq!(e[2].status, FileStatus::Modified);
+    assert_eq!(e[3].status, FileStatus::Added);
+    assert_eq!(e[3].parents.len(), 0);
+    assert_eq!(e[0].subject, "append");
+    assert_eq!(e[0].parents, vec![c3.clone()]);
+
+    let b = file::blame(r.path(), "dir_b.txt", "HEAD").unwrap();
+    assert!(!b.binary && !b.truncated);
+    let who: Vec<&str> = b.lines.iter().map(|l| l.hash.as_str()).collect();
+    assert_eq!(who, vec![c1.as_str(), c2.as_str(), c1.as_str(), c4.as_str()]);
+    assert_eq!(b.lines[1].text, "two changed");
+    assert_eq!(b.lines[0].orig_path, "a.txt");
+    assert_eq!(b.lines[3].orig_path, "dir_b.txt");
+    assert_eq!(b.commits.len(), 3);
+    assert_eq!(b.commits[0].hash, c1);
+    assert!(b.commits[0].boundary);
+    assert_eq!(b.commits[1].subject, "modify");
+    assert_eq!(b.commits[0].author_email, "test@example.com");
+
+    let files = file::list_files(r.path(), None).unwrap();
+    assert_eq!(files, vec!["dir_b.txt".to_string(), "other.txt".to_string()]);
+    assert!(file::blame(r.path(), "nope.txt", "HEAD").is_err());
+}
+
+#[test]
+fn blame_binary_and_unborn_files() {
+    let r = TestRepo::new();
+    assert!(file::list_files(r.path(), None).unwrap().is_empty());
+    assert!(file::file_history(r.path(), "x", None).unwrap().entries.is_empty());
+    let p = r.dir.join("img.bin");
+    std::fs::write(&p, [0u8, 1, 2, 0, 255]).unwrap();
+    r.git(&["add", "-A"]);
+    r.git(&["commit", "-q", "-m", "bin"]);
+    let b = file::blame(r.path(), "img.bin", "HEAD").unwrap();
+    assert!(b.binary && b.lines.is_empty());
+    let h = file::file_history(r.path(), "img.bin", Some("HEAD")).unwrap();
+    assert_eq!(h.entries.len(), 1);
+    assert!(h.entries[0].binary);
+    assert_eq!(h.entries[0].additions, None);
 }

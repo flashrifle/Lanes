@@ -11,6 +11,9 @@ const k = <X>(o: Keys<X>) => Object.keys(o).sort();
 const expected: Record<string, string[]> = {
   AppError: k<T.AppError>({ code: true, message: true, stderr: true }),
   AuthorInfo: k<T.AuthorInfo>({ name: true, email: true, commitCount: true }),
+  BlameCommit: k<T.BlameCommit>({ hash: true, authorName: true, authorEmail: true, authorTime: true, subject: true, boundary: true }),
+  BlameLine: k<T.BlameLine>({ hash: true, origLine: true, origPath: true, text: true }),
+  BlameResult: k<T.BlameResult>({ path: true, rev: true, lines: true, commits: true, binary: true, truncated: true }),
   BranchNameCheck: k<T.BranchNameCheck>({ valid: true, exists: true, message: true }),
   ChangedFile: k<T.ChangedFile>({ path: true, oldPath: true, status: true, additions: true, deletions: true, binary: true, fromHash: true, toHash: true }),
   ChangesResult: k<T.ChangesResult>({ mode: true, isMerge: true, files: true }),
@@ -22,6 +25,8 @@ const expected: Record<string, string[]> = {
   DiffLine: k<T.DiffLine>({ kind: true, oldLine: true, newLine: true, text: true }),
   DiffRequest: k<T.DiffRequest>({ path: true, oldPath: true, fromHash: true, toHash: true, contextLines: true }),
   FileDiff: k<T.FileDiff>({ path: true, oldPath: true, binary: true, oldMode: true, newMode: true, hunks: true, truncated: true }),
+  FileHistory: k<T.FileHistory>({ path: true, entries: true, truncated: true }),
+  FileHistoryEntry: k<T.FileHistoryEntry>({ hash: true, parents: true, authorName: true, authorEmail: true, authorTime: true, subject: true, path: true, oldPath: true, status: true, additions: true, deletions: true, binary: true }),
   FilterResult: k<T.FilterResult>({ matches: true }),
   GitProgressEvent: k<T.GitProgressEvent>({ repoPath: true, op: true, line: true }),
   GitUser: k<T.GitUser>({ name: true, email: true }),

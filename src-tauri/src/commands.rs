@@ -1,5 +1,5 @@
 use crate::error::{AppError, Result};
-use crate::git::{changes, diff, log, ops, refs};
+use crate::git::{changes, diff, file, log, ops, refs};
 use crate::models::*;
 use crate::snapshot;
 use crate::state::AppState;
@@ -142,6 +142,21 @@ pub async fn get_changed_files(repo_path: String, hashes: Vec<String>) -> Result
 #[tauri::command]
 pub async fn get_file_diff(repo_path: String, request: DiffRequest) -> Result<FileDiff> {
     blocking(move || diff::file_diff(&repo_path, &request)).await
+}
+
+#[tauri::command]
+pub async fn get_file_history(repo_path: String, path: String, rev: Option<String>) -> Result<FileHistory> {
+    blocking(move || file::file_history(&repo_path, &path, rev.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn get_blame(repo_path: String, path: String, rev: String) -> Result<BlameResult> {
+    blocking(move || file::blame(&repo_path, &path, &rev)).await
+}
+
+#[tauri::command]
+pub async fn list_files(repo_path: String, rev: Option<String>) -> Result<Vec<String>> {
+    blocking(move || file::list_files(&repo_path, rev.as_deref())).await
 }
 
 #[tauri::command]

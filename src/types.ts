@@ -244,6 +244,55 @@ export interface FileDiff {
   truncated: boolean;        // diff exceeded 2 MB / 20k lines; hunks cut
 }
 
+// ───────────── File history / blame ─────────────
+// One commit that touched the file, newest first. Follows renames (git log --follow), so `path` is the file's
+// name at that commit. Diff for an entry: DiffRequest { path, oldPath, fromHash: parents[0] ?? null, toHash: hash }.
+export interface FileHistoryEntry {
+  hash: string;
+  parents: string[];
+  authorName: string;
+  authorEmail: string;
+  authorTime: number;        // unix seconds
+  subject: string;
+  path: string;              // path at this commit
+  oldPath: string | null;    // previous path when this commit renamed/copied the file
+  status: FileStatus;
+  additions: number | null;  // null when binary or unknown
+  deletions: number | null;
+  binary: boolean;
+}
+
+export interface FileHistory {
+  path: string;              // as requested
+  entries: FileHistoryEntry[];
+  truncated: boolean;        // capped at 5000 entries
+}
+
+export interface BlameCommit {
+  hash: string;
+  authorName: string;
+  authorEmail: string;
+  authorTime: number;
+  subject: string;
+  boundary: boolean;         // blame boundary (root / shallow limit)
+}
+
+export interface BlameLine {
+  hash: string;              // key into BlameResult.commits
+  origLine: number;          // 1-based line number in that commit's version
+  origPath: string;          // file path in that commit (renames)
+  text: string;              // without trailing \n
+}
+
+export interface BlameResult {
+  path: string;
+  rev: string;               // revision blamed, as requested
+  lines: BlameLine[];        // index i = line i+1 of the file at `rev`
+  commits: BlameCommit[];    // unique, in order of first appearance
+  binary: boolean;           // binary file: lines empty
+  truncated: boolean;        // capped at 50k lines
+}
+
 // ───────────── Write ops ─────────────
 export type CheckoutTarget =
   | { kind: 'localBranch'; name: string }                          // short name
@@ -299,6 +348,12 @@ export interface CommandMap {
   get_signatures: [{ repoPath: string; hashes: string[] }, SignatureInfo[]];
   get_changed_files: [{ repoPath: string; hashes: string[] }, ChangesResult];
   get_file_diff: [{ repoPath: string; request: DiffRequest }, FileDiff];
+  /** git log --follow for one file; rev null = HEAD. */
+  get_file_history: [{ repoPath: string; path: string; rev: string | null }, FileHistory];
+  /** git blame --porcelain <rev> -- <path>. */
+  get_blame: [{ repoPath: string; path: string; rev: string }, BlameResult];
+  /** Tracked file paths at rev (null = HEAD), sorted; for the file picker. */
+  list_files: [{ repoPath: string; rev: string | null }, string[]];
   validate_branch_name: [{ repoPath: string; name: string }, BranchNameCheck];
   checkout: [{ repoPath: string; target: CheckoutTarget }, OpResult];
   fetch: [{ repoPath: string; remote: string | null }, OpResult];

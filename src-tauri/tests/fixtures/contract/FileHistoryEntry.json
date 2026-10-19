@@ -1,0 +1,16 @@
+{
+  "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "parents": [
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  ],
+  "authorName": "n",
+  "authorEmail": "e",
+  "authorTime": 1,
+  "subject": "s",
+  "path": "new",
+  "oldPath": "old",
+  "status": "renamed",
+  "additions": null,
+  "deletions": null,
+  "binary": true
+}

@@ -1,5 +1,6 @@
 pub mod changes;
 pub mod diff;
+pub mod file;
 pub mod log;
 pub mod ops;
 pub mod refs;

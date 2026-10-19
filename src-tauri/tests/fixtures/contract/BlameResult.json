@@ -1,0 +1,24 @@
+{
+  "path": "p",
+  "rev": "HEAD",
+  "lines": [
+    {
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "origLine": 1,
+      "origPath": "p",
+      "text": "t"
+    }
+  ],
+  "commits": [
+    {
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "authorName": "n",
+      "authorEmail": "e",
+      "authorTime": 1,
+      "subject": "s",
+      "boundary": true
+    }
+  ],
+  "binary": false,
+  "truncated": false
+}

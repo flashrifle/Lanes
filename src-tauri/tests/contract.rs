@@ -173,6 +173,37 @@ fn write_contract_fixtures() {
             truncated: false,
         },
     );
+    let fh = FileHistoryEntry {
+        hash: "a".repeat(40),
+        parents: vec!["b".repeat(40)],
+        author_name: "n".into(),
+        author_email: "e".into(),
+        author_time: 1,
+        subject: "s".into(),
+        path: "new".into(),
+        old_path: Some("old".into()),
+        status: FileStatus::Renamed,
+        additions: None,
+        deletions: None,
+        binary: true,
+    };
+    write("FileHistoryEntry", &fh);
+    write("FileHistory", &FileHistory { path: "new".into(), entries: vec![fh], truncated: false });
+    let bc = BlameCommit {
+        hash: "a".repeat(40),
+        author_name: "n".into(),
+        author_email: "e".into(),
+        author_time: 1,
+        subject: "s".into(),
+        boundary: true,
+    };
+    let bl = BlameLine { hash: "a".repeat(40), orig_line: 1, orig_path: "p".into(), text: "t".into() };
+    write("BlameCommit", &bc);
+    write("BlameLine", &bl);
+    write(
+        "BlameResult",
+        &BlameResult { path: "p".into(), rev: "HEAD".into(), lines: vec![bl], commits: vec![bc], binary: false, truncated: false },
+    );
     write("CheckoutTarget", &CheckoutTarget::RemoteBranch { name: "origin/x".into(), local_name: None });
     write("OpResult", &OpResult { message: "ok".into() });
     write("BranchNameCheck", &BranchNameCheck { valid: true, exists: false, message: None });

@@ -352,3 +352,60 @@ pub struct GitProgressEvent {
 
 pub const EVENT_REPO_CHANGED: &str = "repo-changed";
 pub const EVENT_GIT_PROGRESS: &str = "git-progress";
+
+// ───────────── File history / blame ─────────────
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileHistoryEntry {
+    pub hash: String,
+    pub parents: Vec<String>,
+    pub author_name: String,
+    pub author_email: String,
+    pub author_time: i64,
+    pub subject: String,
+    pub path: String,
+    pub old_path: Option<String>,
+    pub status: FileStatus,
+    pub additions: Option<u32>,
+    pub deletions: Option<u32>,
+    pub binary: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileHistory {
+    pub path: String,
+    pub entries: Vec<FileHistoryEntry>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BlameCommit {
+    pub hash: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub author_time: i64,
+    pub subject: String,
+    pub boundary: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BlameLine {
+    pub hash: String,
+    pub orig_line: u32,
+    pub orig_path: String,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BlameResult {
+    pub path: String,
+    pub rev: String,
+    pub lines: Vec<BlameLine>,
+    pub commits: Vec<BlameCommit>,
+    pub binary: bool,
+    pub truncated: bool,
+}
