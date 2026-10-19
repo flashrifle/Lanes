@@ -37,7 +37,8 @@ export function buildGraph(snapshot: LogSnapshot, options: GraphOptions): GraphL
   const rowLayout = new Int32Array(vg.rows);
   for (let r = 0; r < vg.rows; r++) rowLayout[r] = layout.layoutIndex[vg.rowCommit[r]];
 
-  const colors = computeLineColors(g, snapshot.parents, snapshot.hashes, snapshot.refs?.refs ?? []);
+  const refs = snapshot.refs?.refs ?? [];
+  const colors = computeLineColors(g, snapshot.parents, snapshot.hashes, refs);
 
   const gen = new PrintElementGenerator(vg, rowLayout, colors, options.collapseLongEdges);
   const rowCount = vg.rows;
@@ -60,18 +61,21 @@ export function buildGraph(snapshot: LogSnapshot, options: GraphOptions): GraphL
     rowOf(commitIndex: number): number {
       return commitIndex >= 0 && commitIndex < n ? vg.commitRow[commitIndex] : -1;
     },
-    // Phase 0 stubs — graph-engine replaces these with real per-line identity from colors.ts.
-    lineOf(): number {
-      return -1;
+    lineOf(commitIndex: number): number {
+      return commitIndex >= 0 && commitIndex < n ? colors.owner[commitIndex] : -1;
     },
-    lineKey(): string {
-      return '';
+    lineKey(line: number): string {
+      return line >= 0 && line < colors.ownerKey.length ? colors.ownerKey[line] : '';
     },
-    lineOfKey(): number {
-      return -1;
+    lineOfKey(key: string): number {
+      return colors.lineOfKey(key);
     },
-    lineOfRef(): number {
-      return -1;
+    lineOfRef(fullName: string): number {
+      const own = colors.refOwner(fullName);
+      if (own >= 0 && colors.ownerSize[own] > 0) return own;
+      const ref = refs.find((r) => r.fullName === fullName);
+      const c = ref?.index;
+      return c != null && c >= 0 && c < n ? colors.owner[c] : -1;
     },
   };
 }

@@ -1,0 +1,5 @@
+/* graph-engine: branch-line highlight affordances (owned with LogTable/GraphCell). */
+.log-row.line-dim .subject,
+.log-row.line-dim .badges { opacity: 0.4; }
+.graph-cell.hit { cursor: pointer; }
+.log-row .badge[data-ref] { cursor: pointer; }

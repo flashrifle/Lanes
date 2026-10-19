@@ -17,6 +17,8 @@ import { t } from '../../i18n';
 import { WorkingTreeRow } from '../commit/WorkingTreeRow';
 import { useWorkingRowVisible } from '../commit/commitStore';
 import { commitMenuItems } from '../ops/menus';
+import { hitTestGraphRow, nextHighlightKey } from './graphHit';
+import './log-ext.css';
 
 interface RowProps {
   row: number;
@@ -36,9 +38,10 @@ interface RowProps {
 const Row = memo(function Row({ row, top, rowH, graph, meta, labels, sig, selected, focused, highlightLine, onContext }: RowProps) {
   const merge = (meta?.parentCount ?? 0) > 1;
   const badge = badgeOf(graph.nodeColor);
+  const dim = highlightLine >= 0 && graph.nodeLine !== highlightLine;
   return (
     <div
-      className={'log-row' + (selected ? ' selected' : '') + (focused ? ' focused' : '') + (merge ? ' merge' : '')}
+      className={'log-row' + (selected ? ' selected' : '') + (focused ? ' focused' : '') + (merge ? ' merge' : '') + (dim ? ' line-dim' : '')}
       style={{ transform: `translateY(${top}px)`, height: rowH }}
       data-row={row}
       onContextMenu={(e) => onContext(e, row)}
@@ -54,6 +57,7 @@ const Row = memo(function Row({ row, top, rowH, graph, meta, labels, sig, select
                 className={`badge ${l.kind}${l.isCurrent ? ' current' : ''}`}
                 style={{ ['--c' as string]: badge.bg, ['--ink' as string]: badge.ink }}
                 title={l.fullNames.join('\n')}
+                data-ref={l.fullNames[0]}
               >
                 {l.isFavorite && <Icon name="star" size={9} />}
                 {l.kind === 'tag' && <Icon name="tag" size={10} />}
@@ -91,7 +95,8 @@ export function LogTable() {
   const scrollRequest = useRepo((s) => s.scrollRequest);
   const loading = useRepo((s) => s.loading);
   const parentRef = useRef<HTMLDivElement>(null);
-  const ROW_H = useMetrics().rowH;
+  const metrics = useMetrics();
+  const ROW_H = metrics.rowH;
   const ctx = useContextMenu();
   const highlightKey = useRepo((s) => s.highlightKey);
   const highlightLine = layout && highlightKey ? layout.lineOfKey(highlightKey) : -1;
@@ -164,7 +169,13 @@ export function LogTable() {
     let target: number | null = null;
     switch (e.key) {
       case 'ArrowDown': target = cur + 1; break;
-      case 'ArrowUp': target = cur < 0 ? 0 : cur - 1; break;
+      case 'ArrowUp':
+        if (cur === 0 && workingVisible && !e.shiftKey) { e.preventDefault(); store.selectWorking(); return; }
+        target = cur < 0 ? 0 : cur - 1;
+        break;
+      case 'Escape':
+        if (highlightKey) { e.preventDefault(); store.setHighlightKey(null); }
+        return;
       case 'PageDown': target = cur + page; break;
       case 'PageUp': target = cur - page; break;
       case 'Home': target = 0; break;
@@ -202,7 +213,47 @@ export function LogTable() {
     if (IS_MAC && e.ctrlKey) return; // ctrl+click is a context-menu gesture on macOS
     const el = (e.target as HTMLElement).closest('[data-row]') as HTMLElement | null;
     if (!el) return;
-    selectRowAt(Number(el.dataset.row), { shift: e.shiftKey, toggle: hasMod(e) });
+    const row = Number(el.dataset.row);
+    if (layout && !e.shiftKey && !hasMod(e)) {
+      const key = graphClickKey(e, row);
+      if (key !== undefined) store.setHighlightKey(nextHighlightKey(highlightKey, key));
+    }
+    selectRowAt(row, { shift: e.shiftKey, toggle: hasMod(e) });
+  };
+
+  /** Line key under a click: string = a line was hit, null = empty graph space (clears), undefined = not the graph. */
+  const graphClickKey = (e: React.MouseEvent, row: number): string | null | undefined => {
+    if (!layout) return undefined;
+    const target = e.target as HTMLElement;
+    const badge = target.closest('[data-ref]') as HTMLElement | null;
+    if (badge?.dataset.ref) {
+      const line = layout.lineOfRef(badge.dataset.ref);
+      return line >= 0 ? layout.lineKey(line) || null : null;
+    }
+    const hit = graphHitAt(e, row);
+    if (hit === undefined) return undefined;
+    return hit ? layout.lineKey(hit.line) || null : null;
+  };
+
+  const graphHitAt = (e: React.MouseEvent, row: number) => {
+    const target = e.target as HTMLElement;
+    if (!layout || !(target instanceof HTMLCanvasElement) || !target.classList.contains('graph-cell')) return undefined;
+    const r = target.getBoundingClientRect();
+    return hitTestGraphRow(layout.getRow(row), metrics, e.clientX - r.left, e.clientY - r.top);
+  };
+
+  // Hover affordance: pointer + hint over clickable graph elements.
+  const onMouseMove = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (!(target instanceof HTMLCanvasElement)) return;
+    const el = target.closest('[data-row]') as HTMLElement | null;
+    if (!el) return;
+    const hit = graphHitAt(e, Number(el.dataset.row));
+    const on = !!hit;
+    if (target.classList.contains('hit') !== on) {
+      target.classList.toggle('hit', on);
+      target.title = on ? t('graph.highlightHint') : '';
+    }
   };
 
   void sigVersion;
@@ -211,7 +262,7 @@ export function LogTable() {
   return (
     <div className="log-table">
       {loading && <div className="loading-bar" />}
-      <div className="log-scroll" ref={parentRef} tabIndex={0} onKeyDown={onKeyDown} onMouseDown={onRowClick}>
+      <div className="log-scroll" ref={parentRef} tabIndex={0} onKeyDown={onKeyDown} onMouseDown={onRowClick} onMouseMove={onMouseMove}>
         {workingVisible && <WorkingTreeRow height={ROW_H} />}
         {!layout ? (
           <div className="empty-note">{loading ? t('common.loading') : ''}</div>

@@ -169,11 +169,16 @@ export class PrintElementGenerator {
     return result;
   }
 
-  /** Same value for both halves of an edge (it depends only on the edge id). */
-  private edgeColor(e: number): number {
+  private arrow(dir: 'up' | 'down', lane: number, e: number): GraphArrowElement {
+    const line = this.edgeLine(e);
+    return { dir, lane, color: this.colors.ownerColor[line], line };
+  }
+
+  /** Line id of an edge; same for both halves (depends only on the edge id), same rule as edgeColor. */
+  private edgeLine(e: number): number {
     const { eUp, eDown, eDotted, rowCommit } = this.g;
     const d = eDown[e];
-    return this.colors.edgeColor(rowCommit[eUp[e]], d < 0 ? -1 : rowCommit[d], eDotted[e] === 1);
+    return this.colors.edgeLine(rowCommit[eUp[e]], d < 0 ? -1 : rowCommit[d], eDotted[e] === 1);
   }
 
   getRow(row: number): GraphRow {
@@ -203,7 +208,8 @@ export class PrintElementGenerator {
     let nodeLane = 0;
     let maxLane = 0;
     const pushEdge = (dir: 'up' | 'down', lane: number, otherLane: number, e: number) => {
-      edges.push({ dir, lane, otherLane, color: this.edgeColor(e), dotted: eDotted[e] === 1, line: 0 }); // TODO(graph-engine): real line id
+      const line = this.edgeLine(e);
+      edges.push({ dir, lane, otherLane, color: this.colors.ownerColor[line], dotted: eDotted[e] === 1, line });
       const m = Math.max(lane, Math.floor((lane + otherLane) / 2)); // half-lane midpoints fit in the floor lane
       if (m > maxLane) maxLane = m;
     };
@@ -229,9 +235,9 @@ export class PrintElementGenerator {
         const u = upPos(el);
         const arrow = this.arrowType(el, row);
         if (d >= 0) pushEdge('down', pos, d, el);
-        else if (arrow === Arrow.Down) arrows.push({ dir: 'down', lane: pos, color: this.edgeColor(el), line: 0 });
+        else if (arrow === Arrow.Down) arrows.push(this.arrow('down', pos, el));
         if (u >= 0) pushEdge('up', pos, u, el);
-        else if (arrow === Arrow.Up) arrows.push({ dir: 'up', lane: pos, color: this.edgeColor(el), line: 0 });
+        else if (arrow === Arrow.Up) arrows.push(this.arrow('up', pos, el));
       }
     }
 
@@ -239,7 +245,7 @@ export class PrintElementGenerator {
       commitIndex: g.rowCommit[row],
       nodeLane,
       nodeColor: this.colors.nodeColor(g.rowCommit[row]),
-      nodeLine: 0, // TODO(graph-engine)
+      nodeLine: this.colors.owner[g.rowCommit[row]],
       laneCount: maxLane + 1,
       edges,
       arrows,

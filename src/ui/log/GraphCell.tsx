@@ -9,6 +9,8 @@ const BG = '#14161D';
 const SEL_BG = '#24304F';
 /** Width of the background-coloured outline drawn around each line (per side, px). */
 const CASING = 1.75;
+/** Opacity of graph elements off the highlighted branch line. */
+export const DIM_ALPHA = 0.25;
 
 const laneX = (m: GraphMetrics, l: number): number => m.laneW * l + m.laneW / 2;
 
@@ -45,8 +47,9 @@ function boundaryPoint(m: GraphMetrics, e: GraphEdgeElement): Pt {
  * Metro rendering. A commit-to-commit connection is one straight line from row centre to row centre (each canvas
  * draws its half), so lane shifts are single clean diagonals with sharp corners and no per-row notches.
  */
-export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: GraphMetrics, selected = false): void {
+export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: GraphMetrics, selected = false, highlightLine = -1): void {
   const { rowH, lineW } = m;
+  const alphaOf = (line: number): number => (highlightLine >= 0 && line !== highlightLine ? DIM_ALPHA : 1);
   const mid = rowH / 2;
   ctx.lineWidth = lineW;
   ctx.lineCap = 'butt';
@@ -58,7 +61,7 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
   const singles: GraphEdgeElement[] = [];
   for (const e of row.edges) {
     if (e.lane === row.nodeLane) { singles.push(e); continue; }
-    const key = `${e.lane}|${e.color}|${e.dotted ? 1 : 0}`;
+    const key = `${e.lane}|${e.line}|${e.color}|${e.dotted ? 1 : 0}`;
     const p = passing.get(key) ?? {};
     if (p[e.dir]) { singles.push(e); continue; }
     p[e.dir] = e;
@@ -99,14 +102,16 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
     });
   }
 
-  items.sort((p, q) => p.e.color - q.e.color);
+  // Dimmed (off-line) elements first so the highlighted line passes over them; then by colour as before.
+  items.sort((p, q) => alphaOf(p.e.line) - alphaOf(q.e.line) || p.e.color - q.e.color);
   for (const { e, path, casingPath } of items) {
+    const a = alphaOf(e.line);
     ctx.beginPath(); casingPath();
-    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.setLineDash([]); ctx.globalAlpha = a;
     ctx.strokeStyle = casing; ctx.lineWidth = lineW + CASING * 2; ctx.stroke();
     ctx.beginPath(); path();
     ctx.strokeStyle = colorOf(e.color);
-    ctx.globalAlpha = e.dotted ? 0.45 : 1;
+    ctx.globalAlpha = (e.dotted ? 0.45 : 1) * a;
     ctx.setLineDash(e.dotted ? [lineW * 0.9, lineW * 0.9] : []);
     ctx.lineWidth = lineW; ctx.stroke();
   }
@@ -118,6 +123,7 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
   const side = lineW * 2.4;
   const h = (side * Math.sqrt(3)) / 2;
   for (const ar of row.arrows) {
+    ctx.globalAlpha = alphaOf(ar.line);
     const x = laneX(m, ar.lane);
     // Point along the line that runs into the arrow (it often arrives diagonally), not straight up/down.
     const incoming = row.edges.find((e) => e.lane === ar.lane && e.dir !== ar.dir && e.color === ar.color)
@@ -144,6 +150,8 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
     ctx.fillStyle = colorOf(ar.color);
     ctx.fill();
   }
+  const nodeAlpha = alphaOf(row.nodeLine);
+  ctx.globalAlpha = nodeAlpha;
   const nx = laneX(m, row.nodeLane);
   const color = colorOf(row.nodeColor);
   const merge = isMergeRow(row);
@@ -152,10 +160,10 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
     ctx.beginPath();
     ctx.arc(nx, mid, (merge ? m.mergeR : m.nodeR + m.ring / 2) + 2.5, 0, Math.PI * 2);
     ctx.strokeStyle = color;
-    ctx.globalAlpha = 0.4;
+    ctx.globalAlpha = 0.4 * nodeAlpha;
     ctx.lineWidth = 3;
     ctx.stroke();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = nodeAlpha;
   }
   if (merge) {
     // Interchange: white disc with a knock-out ring and a coloured core.
@@ -179,6 +187,7 @@ export function drawGraphRow(ctx: CanvasRenderingContext2D, row: GraphRow, m: Gr
     ctx.strokeStyle = color;
     ctx.stroke();
   }
+  ctx.globalAlpha = 1;
 }
 
 /** A merge commit has two or more edges leaving its node downwards (towards parents). */
@@ -210,7 +219,7 @@ const getDpr = (): number => window.devicePixelRatio || 1;
 export const GraphCell = memo(function GraphCell({ row, selected = false, highlightLine = -1 }: {
   row: GraphRow;
   selected?: boolean;
-  /** Branch line to highlight (others dimmed); -1 = none. Phase 0: accepted but not drawn yet (graph-engine). */
+  /** Branch line to highlight (others drawn at DIM_ALPHA); -1 = none. */
   highlightLine?: number;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -225,8 +234,7 @@ export const GraphCell = memo(function GraphCell({ row, selected = false, highli
     c.height = Math.round(m.rowH * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, m.rowH);
-    drawGraphRow(ctx, row, m, selected);
-    void highlightLine;
+    drawGraphRow(ctx, row, m, selected, highlightLine);
   }, [row, w, dpr, m, selected, highlightLine]);
   return <canvas ref={ref} className="graph-cell" style={{ width: w, height: m.rowH }} />;
 });

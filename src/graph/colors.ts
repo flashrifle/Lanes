@@ -20,6 +20,8 @@
 // 4. Node colour = owner colour. Edge child c -> parent p: first parent -> colour(c), otherwise
 //    colour(p) (the line being merged in). Not-loaded parents: colour(c). Dotted (filtered) edges to an
 //    ancestor a: colour(c) when a is on the same line as c's first parent, else colour(a).
+// 5. Line identity. The owner id is the branch-line id: nodeLine = owner(commit), edgeLine follows the
+//    exact edgeColor rule (so a line id always implies its colour). Keys are stable across reloads.
 
 import type { Ref } from '../types';
 import { GRAPH_COLOR_COUNT } from '../types';
@@ -46,9 +48,17 @@ export interface LineColors {
   readonly ownerKey: readonly string[];
   /** first parent per commit (from the raw parent list; -1 if none / not loaded) */
   readonly firstParent: Int32Array;
+  /** commits owned per owner id */
+  readonly ownerSize: readonly number[];
   nodeColor(commit: number): number;
   /** colour of the edge child -> parent (parent -1 = not loaded) */
   edgeColor(child: number, parent: number, dotted: boolean): number;
+  /** owning line of the edge child -> parent; same rule as edgeColor */
+  edgeLine(child: number, parent: number, dotted: boolean): number;
+  /** owner id of a key, -1 if absent */
+  lineOfKey(key: string): number;
+  /** named owner id of a ref fullName (-1 if the ref is not loaded / unknown) */
+  refOwner(fullName: string): number;
 }
 
 const TRUNK = new Set(['main', 'master']);
@@ -167,9 +177,11 @@ export function computeLineColors(
 
   // 1. named lines
   let currentOwner = -1;
+  const refOwnerMap = new Map<string, number>();
   for (const o of namedOwners(refs, n)) {
     const id = newOwner(o.key, true, o.rank, -1);
     for (const { ref } of o.refs) {
+      if (!refOwnerMap.has(ref.fullName)) refOwnerMap.set(ref.fullName, id);
       claim(ref.index!, id);
       if (ref.type === 'localBranch' && ref.isCurrent) currentOwner = id;
     }
@@ -262,18 +274,34 @@ export function computeLineColors(
   }
 
   const nodeColor = (commit: number): number => ownerColor[owner[commit]];
+  const edgeLine = (child: number, parent: number, dotted: boolean): number => {
+    if (parent < 0) return owner[child];
+    const fp = firstParent[child];
+    if (parent === fp) return owner[child];
+    if (!dotted) return owner[parent];
+    return fp >= 0 && owner[fp] === owner[parent] ? owner[child] : owner[parent];
+  };
+  let keyIndex: Map<string, number> | null = null; // built lazily: 100k builds never pay for it unless used
   return {
     owner,
     ownerColor,
     ownerKey,
+    ownerSize,
     firstParent,
     nodeColor,
     edgeColor(child: number, parent: number, dotted: boolean): number {
-      if (parent < 0) return nodeColor(child);
-      const fp = firstParent[child];
-      if (parent === fp) return nodeColor(child);
-      if (!dotted) return nodeColor(parent);
-      return fp >= 0 && owner[fp] === owner[parent] ? nodeColor(child) : nodeColor(parent);
+      return ownerColor[edgeLine(child, parent, dotted)];
+    },
+    edgeLine,
+    lineOfKey(key: string): number {
+      if (!keyIndex) {
+        keyIndex = new Map();
+        for (let id = 0; id < ownerKey.length; id++) if (ownerSize[id] > 0 && !keyIndex.has(ownerKey[id])) keyIndex.set(ownerKey[id], id);
+      }
+      return keyIndex.get(key) ?? -1;
+    },
+    refOwner(fullName: string): number {
+      return refOwnerMap.get(fullName) ?? -1;
     },
   };
 }

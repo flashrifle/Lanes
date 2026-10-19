@@ -3,4 +3,5 @@ import type { Entry } from '../ko';
 import type { graphKo } from './graph.ko';
 
 export const graphEn: Record<keyof typeof graphKo, Entry> = {
+  'graph.highlightHint': 'Click to highlight branch line (Esc to clear)',
 };
