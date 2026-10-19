@@ -34,33 +34,33 @@ export function RepoActions() {
     <div className="repo-actions">
       <Tooltip side="bottom" label={t('branches.fetchAll')}>
         <button className="ra-btn" onClick={() => void store.fetchAll()}>
-          <Icon name="download" size={14} /><span>{t('actions.fetch')}</span>
+          <Icon name="download" size={14} /><span className="ra-label">{t('actions.fetch')}</span>
         </button>
       </Tooltip>
       <Tooltip side="bottom" label={behind ? t('actions.pullTip', { n: behind }) : t('branches.pull')}>
         <button className={'ra-btn' + (behind ? ' hot' : '')} disabled={!onBranch || noUpstream} onClick={() => void store.pull('ffOnly')}>
-          <Icon name="pull" size={14} /><span>{t('actions.pull')}</span>{behind > 0 && <span className="ra-count">↓{behind}</span>}
+          <Icon name="pull" size={14} /><span className="ra-label">{t('actions.pull')}</span>{behind > 0 && <span className="ra-count">↓{behind}</span>}
         </button>
       </Tooltip>
       <Tooltip side="bottom" label={noUpstream ? t('actions.pushNoUpstream') : ahead ? t('actions.pushTip', { n: ahead }) : t('actions.push')}>
         <button className={'ra-btn' + (ahead || noUpstream ? ' hot' : '')} disabled={!onBranch} onClick={() => store.ops.open({ kind: 'push', localBranch: null })}>
-          <PushIcon /><span>{t('actions.push')}</span>{ahead > 0 && <span className="ra-count">↑{ahead}</span>}
+          <PushIcon /><span className="ra-label">{t('actions.push')}</span>{ahead > 0 && <span className="ra-count">↑{ahead}</span>}
         </button>
       </Tooltip>
       <span className="ra-sep" />
       <Tooltip side="bottom" label={t('actions.commitTip')}>
         <button className={'ra-btn' + (changed ? ' hot' : '')} disabled={changed === 0} onClick={() => store.selectWorking()}>
-          <CommitIcon /><span>{t('actions.commit')}</span>{changed > 0 && <span className="ra-count">{changed}</span>}
+          <CommitIcon /><span className="ra-label">{t('actions.commit')}</span>{changed > 0 && <span className="ra-count">{changed}</span>}
         </button>
       </Tooltip>
       <Tooltip side="bottom" label={t('actions.stashTip')}>
         <button className="ra-btn" disabled={changed === 0} onClick={() => store.commit.openStashSave()}>
-          <StashIcon /><span>{t('actions.stash')}</span>
+          <StashIcon /><span className="ra-label">{t('actions.stash')}</span>
         </button>
       </Tooltip>
       <Tooltip side="bottom" label={t('reflog.menu')}>
         <button className="ra-btn" onClick={() => store.ops.open({ kind: 'reflog', ref: null })}>
-          <ReflogIcon /><span>{t('actions.reflog')}</span>
+          <ReflogIcon /><span className="ra-label">{t('actions.reflog')}</span>
         </button>
       </Tooltip>
     </div>
