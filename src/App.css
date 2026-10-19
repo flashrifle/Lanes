@@ -132,6 +132,7 @@ input:focus-visible { outline: 0; }
 .dd-pop { position: absolute; top: 36px; z-index: 50; min-width: 200px; max-width: 360px; max-height: 360px; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 28px rgba(0,0,0,.55); padding: 6px; }
 .dd-pop.left { left: 0; }
 .dd-pop.right { right: 0; }
+.dd-pop.dd-pop-fixed { position: fixed; z-index: 1000; }
 .pop-list.wide { width: 300px; }
 .pop-title { padding: 6px 8px 2px; font: 800 10px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .pop-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; white-space: nowrap; width: 100%; text-align: left; }
