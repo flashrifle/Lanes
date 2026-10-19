@@ -66,7 +66,7 @@ spctl -a -vv -t install Lanes_<ver>_universal.dmg   # Gatekeeper 확인
 | `design/` | 앱 아이콘 원본 |
 
 ## 라이선스
-[Apache License 2.0](LICENSE)을 따릅니다. Copyright 2026 flashrifle.
+[Apache License 2.0](LICENSE)을 따릅니다. Copyright 2026 J-Lab.
 
 ## 크레딧
 커밋 그래프 엔진은 IntelliJ Platform VCS 로그의 일부를 TypeScript로 옮긴 것입니다(Apache License 2.0).

@@ -37,7 +37,8 @@
       "../licenses/Apache-2.0.txt": "licenses/Apache-2.0.txt",
       "../src/assets/fonts/LICENSES.txt": "licenses/fonts-OFL.txt"
     },
-    "copyright": "Copyright 2026 flashrifle",
+    "copyright": "Copyright © 2026 J-Lab",
+    "publisher": "J-Lab",
     "category": "DeveloperTool",
     "macOS": {
       "signingIdentity": "Developer ID Application: jaemin lee (ZHQJ79W867)",

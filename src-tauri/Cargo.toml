@@ -2,7 +2,7 @@
 name = "lanes"
 version = "0.1.0"
 description = "A standalone Git log viewer modeled on the JetBrains IDE Git tool window"
-authors = ["flashrifle"]
+authors = ["J-Lab"]
 edition = "2024"
 license = "Apache-2.0"
 
