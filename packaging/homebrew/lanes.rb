@@ -2,7 +2,7 @@
 # On each release: bump `version`, set `sha256` to `shasum -a 256 Lanes_<version>_universal.dmg`.
 cask "lanes" do
   version "0.1.0"
-  sha256 "REPLACE_WITH_DMG_SHA256"
+  sha256 "7e0e08663861ab65eb3e15a8c29580b66150ea1ab65076642258ee2c1077ad08"
 
   url "https://github.com/flashrifle/Lanes/releases/download/v#{version}/Lanes_#{version}_universal.dmg"
   name "Lanes"
