@@ -27,3 +27,8 @@ dist-ssr
 *.key
 .tauri/
 .vitest/
+
+# private working notes (kept outside the public repo)
+CLAUDE.md
+CLAUDE.local.md
+docs/RELEASING.md
