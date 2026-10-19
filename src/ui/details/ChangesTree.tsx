@@ -7,6 +7,8 @@ import { useRepo, useRepoStore } from '../state/repoContext';
 import { rowMapOf } from '../state/repoStore';
 import { buildFileTree, fileExt, type FileTreeNode } from './fileTree';
 import { openDiffWindow } from '../../diffwindow/session';
+import { openHistoryWindow } from '../../historywindow/session';
+import { ContextMenu, useContextMenu } from '../common/ContextMenu';
 import { t } from '../../i18n';
 
 const STATUS_CLASS: Record<ChangedFile['status'], string> = {
@@ -28,6 +30,7 @@ export function ChangesTree() {
   const [busy, setBusy] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [selPath, setSelPath] = useState<string | null>(null);
+  const ctx = useContextMenu();
 
   const tooMany = selection.set.size > MAX_CHANGES_COMMITS;
   const hashes = useMemo(() => {
@@ -43,6 +46,13 @@ export function ChangesTree() {
     const title = hashes.length === 1 ? hashes[0].slice(0, 8) : t('changes.commitsTitle', { n: hashes.length });
     openDiffWindow({ repoPath: repo.path, repoName: repo.name, files, index: Math.max(0, files.indexOf(f)), title })
       .catch((e) => store.showToast('error', t('changes.diffOpenFail', { msg: toAppError(e).message })));
+  };
+
+  // Opens (or re-targets) the File History window at this commit, with the commit pre-selected.
+  const openHistory = (f: ChangedFile) => {
+    if (!repo) return;
+    openHistoryWindow({ repoPath: repo.path, repoName: repo.name, path: f.path, rev: f.toHash, selectHash: f.toHash })
+      .catch((e) => store.showToast('error', t('changes.historyOpenFail', { msg: toAppError(e).message })));
   };
 
   useEffect(() => {
@@ -92,6 +102,13 @@ export function ChangesTree() {
         title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
         onClick={() => setSelPath(f.path)}
         onDoubleClick={() => openDiff(f)}
+        onContextMenu={(e) => {
+          setSelPath(f.path);
+          ctx.open(e, [
+            { label: t('changes.showDiff'), onClick: () => openDiff(f) },
+            { label: t('changes.showHistory'), onClick: () => openHistory(f) },
+          ]);
+        }}
         onKeyDown={(e) => { if (e.key === 'Enter') openDiff(f); }}
       >
         <FileIcon ext={fileExt(n.name)} />
@@ -119,6 +136,7 @@ export function ChangesTree() {
         {result && count === 0 && <div className="empty-note">{t('changes.noFiles')}</div>}
         {tree.map((n) => renderNode(n, 0))}
       </div>
+      {ctx.menu && <ContextMenu menu={ctx.menu} onClose={ctx.close} />}
     </div>
   );
 }

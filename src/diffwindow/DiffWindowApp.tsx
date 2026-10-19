@@ -15,6 +15,7 @@ import {
   type DiffSessionUpdateEvent,
 } from './session';
 import './diff.css';
+import { openHistoryWindow } from '../historywindow/session';
 import { t } from '../i18n';
 
 const FULL_CONTEXT = 1_000_000;
@@ -90,6 +91,7 @@ const I = {
       />
     </>
   ),
+  history: <path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.6h2.6M8 5v3.2l2.2 1.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />,
   lock: (
     <>
       <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" />
@@ -364,6 +366,20 @@ export default function DiffWindowApp() {
           <Ico n="collapse" />
         </button>
         {hint && <span className="dw-hint">{hint}</span>}
+        <span className="dw-sep" />
+        <button
+          className="dw-btn"
+          title={t('dw.showHistory')}
+          aria-label={t('dw.showHistory')}
+          disabled={!file}
+          onClick={() => {
+            if (!file) return;
+            openHistoryWindow({ repoPath: session.repoPath, repoName: session.repoName, path: file.path, rev: file.toHash, selectHash: file.toHash })
+              .catch((e) => setHint(t('changes.historyOpenFail', { msg: toAppError(e).message })));
+          }}
+        >
+          <Ico n="history" />
+        </button>
         <span className="dw-grow" />
         {state.kind === 'ok' && <span className="dw-count">{changeCount === 0 ? t('dw.noDifferences') : t('dw.diffCount', { n: changeCount })}</span>}
         <div className="dw-seg" role="group" aria-label={t('dw.viewMode')}>

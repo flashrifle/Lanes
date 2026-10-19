@@ -12,6 +12,7 @@ import { SplitPane } from './ui/layout/SplitPane';
 import { FilterBar } from './ui/log/FilterBar';
 import { LogTable } from './ui/log/LogTable';
 import { IS_MAC } from './ui/platform';
+import { FilePickerHost, filePicker } from './historywindow/FilePicker';
 import { appStore, useApp, type TabEntry } from './ui/state/appStore';
 import { RepoCtx, useRepo, useRepoStore } from './ui/state/repoContext';
 import { TabBar } from './ui/tabs/TabBar';
@@ -101,6 +102,13 @@ function useGlobalShortcuts() {
       const mod = IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
       if (!mod || e.altKey) return;
       const k = e.key.toLowerCase();
+      if (k === 'h' && e.shiftKey) {
+        // ⌘⇧H / Ctrl+Shift+H: file picker → File History window
+        e.preventDefault();
+        const repo = appStore.activeStore()?.getState().repo;
+        if (repo) filePicker.open({ repoPath: repo.path, repoName: repo.name });
+        return;
+      }
       if (k === 't' && !e.shiftKey) { e.preventDefault(); void appStore.chooseAndOpenRepo(); }
       else if (k === 'w' && !e.shiftKey) { e.preventDefault(); appStore.closeActive(); }
       else if (k === 'r' && !e.shiftKey) { e.preventDefault(); appStore.reloadActive(); }
@@ -126,6 +134,7 @@ export default function App() {
       </div>
       {/* App-level messages (e.g. a failed open) when no tab shows its own toast */}
       <Toast toast={appToast} onDismiss={appStore.dismissToast} />
+      <FilePickerHost />
       <TooltipHost />
     </div>
   );

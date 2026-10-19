@@ -6,6 +6,7 @@ import { datePresetRange, parseDateInput, type DatePreset } from '../state/logic
 import { Tooltip } from '../common/Tooltip';
 import { useRepo, useRepoStore } from '../state/repoContext';
 import { modKey } from '../platform';
+import { filePicker } from '../../historywindow/FilePicker';
 import { DENSITIES, densityLabel, setDensity, useDensity, type Density } from './density';
 import { colorOf, MUTED_LINE } from './palette';
 import { t, type Key } from '../../i18n';
@@ -239,6 +240,13 @@ export function FilterBar() {
           </div>
         )}
       </Dropdown>
+      <Tooltip label={t('fp.open')} shortcut={modKey('H', true)}>
+        <button className="icon-btn" onClick={() => { if (repo) filePicker.open({ repoPath: repo.path, repoName: repo.name }); }}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.6h2.6M8 5v3.2l2.2 1.4" />
+          </svg>
+        </button>
+      </Tooltip>
       <Tooltip label={t('filter.refresh')} shortcut={modKey('R')}>
         <button className={'icon-btn' + (loading ? ' spin' : '')} onClick={() => void reload()}>
           <Icon name="refresh" size={14} />
