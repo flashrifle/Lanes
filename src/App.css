@@ -62,7 +62,7 @@ input:focus-visible { outline: 0; }
 
 /* repo bar */
 .repo-view { height: 100%; display: flex; flex-direction: column; }
-.repo-bar { flex: none; height: 30px; display: flex; align-items: center; gap: 12px; padding: 0 12px; background: var(--bg); border-bottom: 1px solid var(--border); font-size: 12px; }
+.repo-bar { flex: none; height: 36px; display: flex; align-items: center; gap: 12px; padding: 0 12px; background: var(--bg); border-bottom: 1px solid var(--border); font-size: 12px; }
 .repo-name { font-weight: 600; }
 .repo-branch { display: inline-flex; align-items: center; gap: 4px; color: var(--muted-2); }
 .repo-op { color: var(--warn); font-weight: 600; }

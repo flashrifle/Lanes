@@ -20,6 +20,7 @@ import { WelcomeScreen } from './ui/welcome/WelcomeScreen';
 import { AppOverlays } from './ui/app/AppOverlays';
 import { CommitOverlays } from './ui/commit/CommitOverlays';
 import { LocalChangesPanel } from './ui/commit/LocalChangesPanel';
+import { RepoActions } from './ui/toolbar/RepoActions';
 import { OperationBanner } from './ui/commit/OperationBanner';
 import { OpsOverlays } from './ui/ops/OpsOverlays';
 import { t } from './i18n';
@@ -43,6 +44,7 @@ function RepoBar() {
       {op && <span className="repo-op">{t(OP_KEY[op])}</span>}
       <OperationBanner />
       <span className="grow" />
+      <RepoActions />
       {snapshot && <span className="muted">{t('repo.commitCount', { n: snapshot.commitCount })} · {snapshot.loadMillis}ms</span>}
     </div>
   );
