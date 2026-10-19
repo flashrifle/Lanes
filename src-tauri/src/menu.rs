@@ -95,7 +95,7 @@ fn strings(lang: Lang) -> Strings {
             settings: "설정…",
             updates: "업데이트 확인…",
             report: "이슈 보고…",
-            credits: "IntelliJ Platform 그래프 엔진 기반 · Apache-2.0",
+            credits: "IntelliJ Platform 그래프 엔진 기반 · Apache-2.0\nJetBrains·IntelliJ는 JetBrains s.r.o.의 상표이며, Lanes는 JetBrains와 관련이 없습니다.",
         },
         Lang::En => Strings {
             about: format!("About {APP_NAME}"),
@@ -122,7 +122,7 @@ fn strings(lang: Lang) -> Strings {
             settings: "Settings…",
             updates: "Check for Updates…",
             report: "Report Issue…",
-            credits: "Graph engine derived from IntelliJ Platform · Apache-2.0",
+            credits: "Graph engine derived from IntelliJ Platform · Apache-2.0\nJetBrains and IntelliJ are trademarks of JetBrains s.r.o.; Lanes is not affiliated with JetBrains.",
         },
     }
 }

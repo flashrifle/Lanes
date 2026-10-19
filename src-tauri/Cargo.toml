@@ -1,7 +1,7 @@
 [package]
 name = "lanes"
 version = "0.1.0"
-description = "A standalone Git log viewer modeled on the JetBrains IDE Git tool window"
+description = "A fast standalone Git client for macOS with an IDE-grade commit log"
 authors = ["J-Lab"]
 edition = "2024"
 license = "Apache-2.0"

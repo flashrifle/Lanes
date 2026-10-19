@@ -2,7 +2,7 @@
 
 # Lanes
 
-JetBrains IDE의 Git 툴 윈도우를 본뜬, 빠르고 가벼운 macOS용 독립 실행형 Git 클라이언트입니다.
+IDE에 들어 있는 Git 로그 창을 따로 떼어 낸 듯한, 빠르고 가벼운 macOS용 독립 실행형 Git 클라이언트입니다.
 IDE를 열지 않고도 커밋 그래프, 브랜치 트리, 필터, 파일 히스토리, blame을 그대로 쓸 수 있고,
 커밋·스테이징·push·merge·rebase 같은 일상 작업도 Lanes 안에서 끝낼 수 있습니다.
 
@@ -22,7 +22,7 @@ Tauri 2(Rust) + React + TypeScript로 만들었고, 시스템에 설치된 `git`
 ## 주요 기능
 
 ### 히스토리 보기
-- **커밋 그래프**: IntelliJ와 같은 레인 배치와 "Standard"(Bek) 정렬. 커밋 10만 개 이상도 부드럽게 표시
+- **커밋 그래프**: 레인 배치와 "Standard"(Bek) 정렬. IntelliJ Platform의 오픈소스 그래프 엔진을 옮겨 왔습니다. 커밋 10만 개 이상도 부드럽게 표시
 - **지하철 노선도 스타일**: 직선과 각진 꺾임, 교차점 외곽선, merge 커밋은 환승역 모양
 - **브랜치마다 하나의 노선 색**: 한 줄기는 처음부터 끝까지 같은 색. `main`과 `origin/main`은 같은 색
 - **노선 강조**: 그래프의 선이나 브랜치 배지를 클릭하면 그 줄기만 진하게, 나머지는 흐리게
@@ -127,7 +127,11 @@ pnpm tauri build --target universal-apple-darwin  # Apple Silicon + Intel 유니
 
 ## 크레딧
 커밋 그래프 엔진은 IntelliJ Platform VCS 로그의 일부를 TypeScript로 옮긴 것입니다(Apache License 2.0).
-자세한 내용은 [NOTICE](NOTICE)를 참고하세요. Lanes는 JetBrains와 관련이 없는 독립 프로젝트입니다.
+자세한 내용은 [NOTICE](NOTICE)를 참고하세요.
+
+## 상표
+JetBrains, IntelliJ, WebStorm은 JetBrains s.r.o.의 상표입니다. Lanes는 JetBrains와 관련이 없는 독립 프로젝트이며,
+JetBrains의 후원이나 보증을 받지 않았습니다. 상표명은 출처와 호환성을 설명하는 데만 사용합니다.
 
 번들 폰트 IBM Plex Sans KR, Archivo, JetBrains Mono는 SIL Open Font License 1.1을 따릅니다
 ([src/assets/fonts/LICENSES.txt](src/assets/fonts/LICENSES.txt)).

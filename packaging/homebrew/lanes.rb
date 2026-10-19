@@ -6,7 +6,7 @@ cask "lanes" do
 
   url "https://github.com/flashrifle/Lanes/releases/download/v#{version}/Lanes_#{version}_universal.dmg"
   name "Lanes"
-  desc "Standalone Git log viewer modelled on the JetBrains Git tool window"
+  desc "Standalone Git client with an IDE-grade commit graph"
   homepage "https://github.com/flashrifle/Lanes"
 
   livecheck do
