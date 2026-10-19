@@ -1,5 +1,5 @@
 // Pure helpers used by the store (selection, filter, visibility mask). No DOM / Tauri imports.
-import type { DateRange, LogFilter } from '../../types';
+import type { DateRange, LogFilter, RevRange } from '../../types';
 
 // ───────────── Selection ─────────────
 export interface Selection {
@@ -95,12 +95,15 @@ export interface FilterUi {
   users: string[] | null;
   date: DateRange | null;
   paths: string[] | null;
+  /** Branch compare (ui-ops): commits in `include` not in `exclude`. */
+  revRange: RevRange | null;
 }
 export const EMPTY_FILTER_UI: FilterUi = {
   text: { text: '', regex: false, matchCase: false },
   users: null,
   date: null,
   paths: null,
+  revRange: null,
 };
 
 export function toLogFilter(ui: FilterUi): LogFilter {
@@ -110,12 +113,12 @@ export function toLogFilter(ui: FilterUi): LogFilter {
     users: ui.users && ui.users.length ? ui.users : null,
     date: ui.date && (ui.date.since != null || ui.date.until != null) ? ui.date : null,
     paths: ui.paths && ui.paths.length ? ui.paths : null,
-    revRange: null, // TODO(ui-ops): branch compare chip
+    revRange: ui.revRange ?? null,
   };
 }
 
 export function isFilterEmpty(f: LogFilter): boolean {
-  return !f.text && !f.users && !f.date && !f.paths;
+  return !f.text && !f.users && !f.date && !f.paths && !f.revRange;
 }
 
 /** FilterResult.matches → GraphOptions.visible mask (null = everything visible). */

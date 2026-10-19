@@ -10,6 +10,9 @@ import { filePicker } from '../../historywindow/FilePicker';
 import { DENSITIES, densityLabel, setDensity, useDensity, type Density } from './density';
 import { colorOf, MUTED_LINE } from './palette';
 import { t, type Key } from '../../i18n';
+import { call } from '../../api';
+import type { CompareSummary } from '../../types';
+import { currentRev, headCtxOf, shortHash } from '../ops/logic';
 
 const SORTS: { id: GraphSortType; key: Key }[] = [
   { id: 'bek', key: 'sort.bek' },
@@ -44,6 +47,20 @@ export function FilterBar() {
   const loading = useRepo((s) => s.loading);
   const layout = useRepo((s) => s.layout);
   const density = useDensity();
+  const revRange = filterUi.revRange;
+  const [cmpA, setCmpA] = useState('');
+  const [cmpB, setCmpB] = useState('');
+  const [counts, setCounts] = useState<CompareSummary | null>(null);
+  const snapId = snapshot?.snapshotId;
+  useEffect(() => {
+    setCounts(null);
+    if (!revRange || !repo) return;
+    let cancelled = false;
+    call('compare_refs', { repoPath: repo.path, a: revRange.include, b: revRange.exclude })
+      .then((c) => { if (!cancelled) setCounts(c); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [revRange?.include, revRange?.exclude, repo?.path, snapId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [text, setText] = useState(filterUi.text.text);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -74,7 +91,7 @@ export function FilterBar() {
   useEffect(() => { if (filterUi.text.text === '' && text !== '') setText(''); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filterUi.text.text]);
 
   const refs = snapshot?.refs.refs ?? [];
-  const shortOf = (full: string) => refs.find((r) => r.fullName === full)?.name ?? full.replace(/^refs\/(heads|remotes|tags)\//, '');
+  const shortOf = (full: string) => refs.find((r) => r.fullName === full)?.name ?? (/^[0-9a-f]{40}$/.test(full) ? shortHash(full) : full.replace(/^refs\/(heads|remotes|tags)\//, ''));
   const branchLabel = scopeRefs ? t('filter.branchN', { n: scopeRefs.length }) : t('filter.branch');
   const dotOf = (full: string): string => {
     const r = refs.find((x) => x.fullName === full);
@@ -157,6 +174,42 @@ export function FilterBar() {
           </Tooltip>
         </span>
       ))}
+
+      <Dropdown label={t('compare.label')} active={!!revRange} title={t('compare.title')}>
+        {(close) => {
+          const opts = refs.filter((r) => r.type !== 'head');
+          const head = headCtxOf(snapshot?.refs);
+          const a = cmpA || revRange?.include || currentRev(head);
+          const b = cmpB || revRange?.exclude || (opts.find((r) => r.type === 'localBranch' && !r.isCurrent)?.fullName ?? '');
+          const sel = (v: string, set: (x: string) => void) => (
+            <select value={v} onChange={(e) => set(e.target.value)}>
+              {head.fullName == null && <option value="">—</option>}
+              {head.fullName != null && <option value={head.fullName}>{head.branch} (HEAD)</option>}
+              {opts.filter((r) => r.fullName !== head.fullName).map((r) => <option key={r.fullName} value={r.fullName}>{r.name}</option>)}
+            </select>
+          );
+          return (
+            <div className="compare-pop">
+              <label>{t('compare.a')}{sel(a, setCmpA)}</label>
+              <label>{t('compare.b')}{sel(b, setCmpB)}</label>
+              <button className="btn primary small" disabled={!a || !b || a === b} onClick={() => { store.ops.compare(a, b); close(); }}>{t('compare.apply')}</button>
+            </div>
+          );
+        }}
+      </Dropdown>
+
+      {revRange && (
+        <span className="chip compare" title={t('compare.chipTip', { a: shortOf(revRange.include), b: shortOf(revRange.exclude) })}>
+          <span className="chip-text">{shortOf(revRange.include)} ↔ {shortOf(revRange.exclude)}</span>
+          {counts && <span className="compare-counts">{t('compare.counts', { a: counts.aOnly, b: counts.bOnly })}{counts.mergeBase ? ` · ${t('compare.base', { hash: shortHash(counts.mergeBase) })}` : ''}</span>}
+          <Tooltip label={t('compare.swap')} side="bottom">
+            <button className="chip-x" aria-label={t('compare.swap')} onClick={() => store.ops.compare(revRange.exclude, revRange.include)}>⇄</button>
+          </Tooltip>
+          <Tooltip label={t('compare.clear')} side="bottom">
+            <button className="chip-x" aria-label={t('compare.clear')} onClick={() => store.ops.clearCompare()}><Icon name="close" size={9} /></button>
+          </Tooltip>
+        </span>
+      )}
 
       <Dropdown label={users ? t('filter.userLabel', { v: users.length === 1 ? users[0] : t('filter.userCount', { n: users.length }) }) : t('filter.user')} active={!!users} onClear={() => setUsers(null)} title={t('filter.userTitle')}>
         {() => (

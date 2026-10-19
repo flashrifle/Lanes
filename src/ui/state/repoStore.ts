@@ -297,8 +297,17 @@ export class RepoStore extends Store<RepoState> {
     this.relayout(this.state.matches, sort, this.anchorHash(), true);
   };
   setScopeRefs = (refs: string[] | null): void => {
-    this.set({ scopeRefs: refs && refs.length ? refs : null });
+    const scopeRefs = refs && refs.length ? refs : null;
+    // Branch compare needs both sides in the snapshot: narrowing the scope ends the compare.
+    const filterUi = scopeRefs && this.state.filterUi.revRange ? { ...this.state.filterUi, revRange: null } : this.state.filterUi;
+    this.set({ scopeRefs, filterUi });
     void this.reload();
+  };
+  /** Branch compare (LogFilter.revRange). Starting a compare widens the scope to all refs. */
+  setRevRange = (revRange: FilterUi['revRange']): void => {
+    this.set({ filterUi: { ...this.state.filterUi, revRange } });
+    if (revRange && this.state.scopeRefs) { this.set({ scopeRefs: null }); void this.reload(); }
+    else void this.applyFilter();
   };
 
   // ───────────── selection actions ─────────────
