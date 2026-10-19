@@ -27,7 +27,9 @@ import { t } from './i18n';
 
 const OP_KEY = { merge: 'op.merge', rebase: 'op.rebase', cherryPick: 'op.cherryPick', revert: 'op.revert', bisect: 'op.bisect' } as const;
 
-function RepoBar() {
+// The repo bar is split per column so each part lines up with the pane below it and follows the splitters:
+// repo/branch over the branch sidebar, actions over the log, commit count over the right column.
+function RepoInfoBar() {
   const repo = useRepo((s) => s.repo);
   const snapshot = useRepo((s) => s.snapshot);
   const head = snapshot?.refs.head;
@@ -42,9 +44,23 @@ function RepoBar() {
         </span>
       )}
       {op && <span className="repo-op">{t(OP_KEY[op])}</span>}
+    </div>
+  );
+}
+
+function ActionBar() {
+  return (
+    <div className="repo-bar">
       <RepoActions />
       <OperationBanner />
-      <span className="grow" />
+    </div>
+  );
+}
+
+function StatsBar() {
+  const snapshot = useRepo((s) => s.snapshot);
+  return (
+    <div className="repo-bar end">
       {snapshot && <span className="muted">{t('repo.commitCount', { n: snapshot.commitCount })} · {snapshot.loadMillis}ms</span>}
     </div>
   );
@@ -53,16 +69,22 @@ function RepoBar() {
 function RepoView() {
   return (
     <div className="repo-view">
-      <RepoBar />
       <div className="repo-main">
         <SplitPane dir="h" fixed="start" defaultSize={240} min={160} storageKey="branches">
-          <BranchPanel />
+          <div className="col-stack">
+            <RepoInfoBar />
+            <BranchPanel />
+          </div>
           <SplitPane dir="h" fixed="end" defaultSize={420} min={260} storageKey="right">
             <div className="center-col">
+              <ActionBar />
               <FilterBar />
               <LogTable />
             </div>
-            <RightColumn />
+            <div className="col-stack">
+              <StatsBar />
+              <RightColumn />
+            </div>
           </SplitPane>
         </SplitPane>
       </div>
