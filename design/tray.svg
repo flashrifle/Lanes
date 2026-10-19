@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="167 115 820 820" width="44" height="44">
+  <!-- Menu bar template icon: black + alpha only (macOS tints it). Same lanes as icon.svg, no plate. -->
+  <defs>
+    <mask id="gap">
+      <rect x="0" y="0" width="1024" height="1024" fill="#fff"/>
+      <g fill="#000">
+        <circle cx="352" cy="270" r="118"/><circle cx="352" cy="820" r="104"/>
+        <circle cx="627" cy="545" r="104"/><circle cx="802" cy="230" r="108"/>
+      </g>
+    </mask>
+  </defs>
+  <g fill="none" stroke="#000" stroke-width="96" stroke-linejoin="miter" mask="url(#gap)">
+    <path d="M352 1000 L352 40"/>
+    <path d="M352 820 L627 545 L352 270"/>
+    <path d="M627 545 L802 370 L802 230"/>
+  </g>
+  <g fill="#000">
+    <circle cx="352" cy="270" r="84"/><circle cx="352" cy="820" r="70"/>
+    <circle cx="627" cy="545" r="70"/><circle cx="802" cy="230" r="74"/>
+  </g>
+</svg>

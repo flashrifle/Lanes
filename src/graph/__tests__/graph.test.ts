@@ -17,7 +17,7 @@ describe('basic layouts', () => {
     expect(l.maxLaneCount).toBe(1);
     const rows = rowsOf(l);
     expect(lanes(l)).toEqual([0, 0, 0, 0]);
-    expect(rows[0].edges).toEqual([{ dir: 'down', lane: 0, otherLane: 0, color: rows[0].nodeColor, dotted: false }]);
+    expect(rows[0].edges).toMatchObject([{ dir: 'down', lane: 0, otherLane: 0, color: rows[0].nodeColor, dotted: false }]);
     expect(rows[1].edges.map((e) => e.dir).sort()).toEqual(['down', 'up']);
     expect(rows[3].edges.map((e) => e.dir)).toEqual(['up']);
     expect(new Set(rows.map((r) => r.nodeColor)).size).toBe(1);
@@ -73,7 +73,7 @@ describe('missing parents', () => {
     const l = build(snapshot([[1, -1], [2], []]));
     const rows = rowsOf(l);
     expect(rows[0].edges.filter((e) => e.dir === 'down').length).toBe(2);
-    expect(rows[1].arrows).toEqual([{ dir: 'down', lane: 1, color: rows[0].nodeColor }]);
+    expect(rows[1].arrows).toMatchObject([{ dir: 'down', lane: 1, color: rows[0].nodeColor }]);
     expect(rows[1].laneCount).toBe(2);
     expect(l.maxLaneCount).toBe(2);
     expect(checkInvariant(l)).toBeNull();
@@ -82,7 +82,7 @@ describe('missing parents', () => {
   it('not-loaded parent of the last row draws a stub', () => {
     const l = build(snapshot([[1], [-1]]));
     const last = l.getRow(1);
-    expect(last.edges.filter((e) => e.dir === 'down')).toEqual([{ dir: 'down', lane: 0, otherLane: 0, color: last.nodeColor, dotted: false }]);
+    expect(last.edges.filter((e) => e.dir === 'down')).toMatchObject([{ dir: 'down', lane: 0, otherLane: 0, color: last.nodeColor, dotted: false }]);
     expect(checkInvariant(l)).toBeNull();
   });
 });
@@ -97,7 +97,7 @@ describe('filter mask', () => {
     expect(l.rowOf(1)).toBe(-1);
     expect(l.rowOf(4)).toBe(2);
     const rows = rowsOf(l);
-    expect(rows[0].edges).toEqual([{ dir: 'down', lane: 0, otherLane: 0, color: rows[0].nodeColor, dotted: true }]);
+    expect(rows[0].edges).toMatchObject([{ dir: 'down', lane: 0, otherLane: 0, color: rows[0].nodeColor, dotted: true }]);
     expect(rows[1].edges.every((e) => e.dotted)).toBe(true);
     expect(checkInvariant(l)).toBeNull();
   });

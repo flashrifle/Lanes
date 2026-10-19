@@ -10,6 +10,9 @@ import {
   selectAll, selectRow, toLogFilter, type FilterUi, type RowMap, type Selection, type TextFilterUi,
 } from './logic';
 import { t } from '../../i18n';
+import { recordError } from '../app/lastError';
+import { CommitStore } from '../commit/commitStore';
+import { OpsStore } from '../ops/opsStore';
 
 export const LOG_LIMIT = 200_000;
 const META_BATCH = 500;
@@ -48,6 +51,10 @@ export interface RepoState {
   toast: ToastState | null;
   dialog: DialogState | null;
   diff: ChangedFile | null;
+  /** The "Uncommitted changes" row is selected (right column shows LocalChangesPanel). Commit selection is cleared. */
+  workingSelected: boolean;
+  /** Highlighted branch line as GraphLayout.lineKey(); kept across reloads. null = no highlight. */
+  highlightKey: string | null;
 }
 
 export function rowMapOf(layout: GraphLayout | null): RowMap {
@@ -84,14 +91,22 @@ export class RepoStore extends Store<RepoState> {
   private dirty = false;
   private filterToken = 0;
 
+  /** Working tree / staging / commit / stash (ui-commit). */
+  readonly commit: CommitStore;
+  /** Write-op dialogs: push, merge/rebase, cherry-pick/revert, reset, tags, reflog, compare (ui-ops). */
+  readonly ops: OpsStore;
+
   constructor(repo: RepoInfo, gen: number) {
     super({
       repo, snapshot: null, layout: null, loading: false, filterUi: EMPTY_FILTER_UI, filterError: false,
       scopeRefs: null, sort: 'bek', matches: null, authors: [], selection: EMPTY_SELECTION,
       metaVersion: 0, sigVersion: 0, scrollRequest: null, toast: null, dialog: null, diff: null,
+      workingSelected: false, highlightKey: null,
     });
     this.path = repo.path;
     this.gen = gen;
+    this.commit = new CommitStore(this);
+    this.ops = new OpsStore(this);
   }
 
   get isDisposed(): boolean { return this.disposed; }
@@ -112,6 +127,8 @@ export class RepoStore extends Store<RepoState> {
     if (snap) void call('release_snapshot', { snapshotId: snap.snapshotId }).catch(() => {});
     this.state = { ...this.state, snapshot: null, layout: null, selection: EMPTY_SELECTION, dialog: null, diff: null, scrollRequest: null, toast: null, loading: false };
     this.metaCache.clear(); this.metaInflight.clear(); this.sigCache.clear(); this.sigRequested.clear();
+    this.commit.dispose();
+    this.ops.dispose();
   }
 
   // ───────────── toast / dialog ─────────────
@@ -125,7 +142,7 @@ export class RepoStore extends Store<RepoState> {
     }
   };
   dismissToast = (): void => { clearTimeout(this.toastTimer); this.set({ toast: null }); };
-  showError = (e: unknown): void => { this.showToast('error', toAppError(e).message); };
+  showError = (e: unknown): void => { recordError(e); this.showToast('error', toAppError(e).message); };
   openDialog = (d: DialogState): void => { this.set({ dialog: d }); };
   closeDialog = (): void => { this.set({ dialog: null }); };
   openDiff = (file: ChangedFile): void => { this.set({ diff: file }); };
@@ -151,6 +168,7 @@ export class RepoStore extends Store<RepoState> {
     const epoch = this.epoch;
     this.reloading = true;
     this.set({ loading: true });
+    void this.commit.refreshStatus();
     try {
       do {
         this.dirty = false;
@@ -285,15 +303,18 @@ export class RepoStore extends Store<RepoState> {
 
   // ───────────── selection actions ─────────────
   selectRowAt = (row: number, mods: { shift: boolean; toggle: boolean }): void => {
-    this.set({ selection: selectRow(this.state.selection, row, mods, rowMapOf(this.state.layout)) });
+    this.set({ selection: selectRow(this.state.selection, row, mods, rowMapOf(this.state.layout)), workingSelected: false });
   };
+  /** Select the "Uncommitted changes" row (clears the commit selection). */
+  selectWorking = (): void => { this.set({ workingSelected: true, selection: EMPTY_SELECTION }); };
+  setHighlightKey = (key: string | null): void => { if (key !== this.state.highlightKey) this.set({ highlightKey: key }); };
   moveFocus = (row: number, extend: boolean): void => {
     const layout = this.state.layout;
     if (!layout) return;
     const sel = moveFocusTo(this.state.selection, row, extend, layout);
-    this.set({ selection: sel, scrollRequest: sel.focus != null ? { row: layout.rowOf(sel.focus), nonce: nonce++ } : this.state.scrollRequest });
+    this.set({ selection: sel, workingSelected: false, scrollRequest: sel.focus != null ? { row: layout.rowOf(sel.focus), nonce: nonce++ } : this.state.scrollRequest });
   };
-  selectAllRows = (): void => { this.set({ selection: selectAll(rowMapOf(this.state.layout)) }); };
+  selectAllRows = (): void => { this.set({ selection: selectAll(rowMapOf(this.state.layout)), workingSelected: false }); };
 
   /** Select a commit by snapshot index and scroll to it. Returns false if hidden / not loaded. */
   jumpToCommitIndex = (ci: number | null): boolean => {
@@ -301,7 +322,7 @@ export class RepoStore extends Store<RepoState> {
     if (ci == null || !layout) return false;
     const row = layout.rowOf(ci);
     if (row < 0) { this.showToast('info', t('store.hiddenByFilter')); return false; }
-    this.set({ selection: selectRow(EMPTY_SELECTION, row, { shift: false, toggle: false }, layout), scrollRequest: { row, nonce: nonce++ } });
+    this.set({ selection: selectRow(EMPTY_SELECTION, row, { shift: false, toggle: false }, layout), workingSelected: false, scrollRequest: { row, nonce: nonce++ } });
     return true;
   };
   jumpToHash = (hash: string): boolean => {
@@ -361,7 +382,8 @@ export class RepoStore extends Store<RepoState> {
   };
 
   // ───────────── git operations ─────────────
-  private async runOp(label: string, fn: (repoPath: string) => Promise<{ message: string }>): Promise<{ ok: true } | { ok: false; error: AppError }> {
+  /** Progress toast → op → info toast + reload. Shared by ui-commit / ui-ops write ops. */
+  async runOp(label: string, fn: (repoPath: string) => Promise<{ message: string }>): Promise<{ ok: true } | { ok: false; error: AppError }> {
     const epoch = this.epoch;
     this.showToast('progress', label);
     try {
@@ -378,7 +400,8 @@ export class RepoStore extends Store<RepoState> {
     }
   }
 
-  private failToast(o: { ok: boolean; error?: AppError }): void {
+  failToast(o: { ok: boolean; error?: AppError }): void {
+    if (!o.ok && o.error) recordError(o.error);
     if (!o.ok && o.error) this.showToast('error', o.error.stderr?.trim().split('\n').slice(-2).join(' ') || o.error.message);
   }
 

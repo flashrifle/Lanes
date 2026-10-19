@@ -1,5 +1,5 @@
-import { call, onGitProgress, onRepoChanged, pickFolder, toAppError } from '../../api';
-import type { RecentRepo } from '../../types';
+import { call, onEvent, onGitProgress, onRepoChanged, pickFolder, toAppError } from '../../api';
+import { EVENT_OPEN_REPO_REQUEST, type OpenRepoRequestEvent, type RecentRepo, type RepoChangeScope } from '../../types';
 import {
   TABS_STORAGE_KEY, addTab, closeTabModel, cycleTab, findTabByPath, parseTabs, serializeTabs, tabForShortcut,
   type TabLike,
@@ -21,6 +21,8 @@ export interface AppState {
   activeId: number | null;
   toast: ToastState | null;
 }
+
+const isStatusOnlyScope = (s: RepoChangeScope): boolean => s === 'index' || s === 'worktree';
 
 let nextTabId = 1;
 let nextGen = 1;
@@ -65,8 +67,15 @@ class AppStore extends Store<AppState> {
     this.initialized = true;
     void onRepoChanged((e) => {
       const tab = findTabByPath(this.state.tabs, e.repoPath);
-      if (tab) void tab.store.reload();
+      if (!tab) return;
+      // index / worktree-only changes (stage, edit a file) refresh the status row, not the whole log.
+      if (e.scopes.length > 0 && e.scopes.every(isStatusOnlyScope)) void tab.store.commit.refreshStatus();
+      else void tab.store.reload();
     }).catch(() => {});
+    // Tray "Open in Lanes" (Rust shows/focuses the main window first).
+    void onEvent<OpenRepoRequestEvent>(EVENT_OPEN_REPO_REQUEST, (e) => { void this.openRepo(e.path); }).catch(() => {});
+    // Files may have changed while the app was in the background (worktree events are debounced).
+    if (typeof window !== 'undefined') window.addEventListener('focus', () => { void this.activeStore()?.commit.refreshStatus(); });
     void onGitProgress((e) => {
       const tab = findTabByPath(this.state.tabs, e.repoPath);
       if (tab) tab.store.onProgress(e.line);

@@ -1,10 +1,16 @@
 /** Source dictionary (Korean). `en.ts` is typed against this key set. */
+import { appKo } from './parts/app.ko';
+import { commitKo } from './parts/commit.ko';
+import { graphKo } from './parts/graph.ko';
+import { opsKo } from './parts/ops.ko';
+import { quickKo } from './parts/quick.ko';
+
 export type Params = Record<string, string | number>;
 export type Entry = string | ((p: Params) => string);
 
 const n = (v: string | number): string => Number(v).toLocaleString('ko-KR');
 
-export const ko = {
+export const koBase = {
   // common
   'common.cancel': '취소',
   'common.checkout': '체크아웃',
@@ -276,5 +282,8 @@ export const ko = {
   'fp.hint': '↑↓ 이동 · Enter 열기 · Esc 닫기',
   'fp.count': (p: Params) => `${n(p.n)}개 파일`,
 } satisfies Record<string, Entry>;
+
+// Feature parts (v0.1): each owned by one agent, see docs/PLAN-v0.1.md. Prefixes keep keys disjoint.
+export const ko = { ...koBase, ...commitKo, ...opsKo, ...appKo, ...graphKo, ...quickKo };
 
 export type Key = keyof typeof ko;

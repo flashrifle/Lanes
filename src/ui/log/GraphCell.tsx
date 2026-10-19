@@ -207,7 +207,12 @@ function subscribeDpr(l: () => void): () => void {
 }
 const getDpr = (): number => window.devicePixelRatio || 1;
 
-export const GraphCell = memo(function GraphCell({ row, selected = false }: { row: GraphRow; selected?: boolean }) {
+export const GraphCell = memo(function GraphCell({ row, selected = false, highlightLine = -1 }: {
+  row: GraphRow;
+  selected?: boolean;
+  /** Branch line to highlight (others dimmed); -1 = none. Phase 0: accepted but not drawn yet (graph-engine). */
+  highlightLine?: number;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const m = useMetrics();
   const w = graphWidth(rowLaneExtent(row), m);
@@ -221,6 +226,7 @@ export const GraphCell = memo(function GraphCell({ row, selected = false }: { ro
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, m.rowH);
     drawGraphRow(ctx, row, m, selected);
-  }, [row, w, dpr, m, selected]);
+    void highlightLine;
+  }, [row, w, dpr, m, selected, highlightLine]);
   return <canvas ref={ref} className="graph-cell" style={{ width: w, height: m.rowH }} />;
 });

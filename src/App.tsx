@@ -17,6 +17,11 @@ import { appStore, useApp, type TabEntry } from './ui/state/appStore';
 import { RepoCtx, useRepo, useRepoStore } from './ui/state/repoContext';
 import { TabBar } from './ui/tabs/TabBar';
 import { WelcomeScreen } from './ui/welcome/WelcomeScreen';
+import { AppOverlays } from './ui/app/AppOverlays';
+import { CommitOverlays } from './ui/commit/CommitOverlays';
+import { LocalChangesPanel } from './ui/commit/LocalChangesPanel';
+import { OperationBanner } from './ui/commit/OperationBanner';
+import { OpsOverlays } from './ui/ops/OpsOverlays';
 import { t } from './i18n';
 
 const OP_KEY = { merge: 'op.merge', rebase: 'op.rebase', cherryPick: 'op.cherryPick', revert: 'op.revert', bisect: 'op.bisect' } as const;
@@ -36,6 +41,7 @@ function RepoBar() {
         </span>
       )}
       {op && <span className="repo-op">{t(OP_KEY[op])}</span>}
+      <OperationBanner />
       <span className="grow" />
       {snapshot && <span className="muted">{t('repo.commitCount', { n: snapshot.commitCount })} · {snapshot.loadMillis}ms</span>}
     </div>
@@ -54,14 +60,23 @@ function RepoView() {
               <FilterBar />
               <LogTable />
             </div>
-            <SplitPane dir="v" fixed="start" defaultSize={260} min={80} storageKey="changes">
-              <ChangesTree />
-              <CommitDetailsPanel />
-            </SplitPane>
+            <RightColumn />
           </SplitPane>
         </SplitPane>
       </div>
     </div>
+  );
+}
+
+/** Right column: local changes while the "Uncommitted changes" row is selected, else the commit's files + details. */
+function RightColumn() {
+  const working = useRepo((s) => s.workingSelected);
+  if (working) return <LocalChangesPanel />;
+  return (
+    <SplitPane dir="v" fixed="start" defaultSize={260} min={80} storageKey="changes">
+      <ChangesTree />
+      <CommitDetailsPanel />
+    </SplitPane>
   );
 }
 
@@ -74,6 +89,8 @@ function TabOverlays() {
     <>
       {dialog?.kind === 'createBranch' && <CreateBranchDialog startPoint={dialog.startPoint} startLabel={dialog.startLabel} />}
       {dialog?.kind === 'confirm' && <ConfirmDialog dialog={dialog} />}
+      <CommitOverlays />
+      <OpsOverlays />
       <Toast toast={toast} onDismiss={store.dismissToast} />
     </>
   );
@@ -135,6 +152,7 @@ export default function App() {
       {/* App-level messages (e.g. a failed open) when no tab shows its own toast */}
       <Toast toast={appToast} onDismiss={appStore.dismissToast} />
       <FilePickerHost />
+      <AppOverlays />
       <TooltipHost />
     </div>
   );

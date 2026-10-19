@@ -60,5 +60,18 @@ export function buildGraph(snapshot: LogSnapshot, options: GraphOptions): GraphL
     rowOf(commitIndex: number): number {
       return commitIndex >= 0 && commitIndex < n ? vg.commitRow[commitIndex] : -1;
     },
+    // Phase 0 stubs — graph-engine replaces these with real per-line identity from colors.ts.
+    lineOf(): number {
+      return -1;
+    },
+    lineKey(): string {
+      return '';
+    },
+    lineOfKey(): number {
+      return -1;
+    },
+    lineOfRef(): number {
+      return -1;
+    },
   };
 }

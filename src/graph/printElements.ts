@@ -203,7 +203,7 @@ export class PrintElementGenerator {
     let nodeLane = 0;
     let maxLane = 0;
     const pushEdge = (dir: 'up' | 'down', lane: number, otherLane: number, e: number) => {
-      edges.push({ dir, lane, otherLane, color: this.edgeColor(e), dotted: eDotted[e] === 1 });
+      edges.push({ dir, lane, otherLane, color: this.edgeColor(e), dotted: eDotted[e] === 1, line: 0 }); // TODO(graph-engine): real line id
       const m = Math.max(lane, Math.floor((lane + otherLane) / 2)); // half-lane midpoints fit in the floor lane
       if (m > maxLane) maxLane = m;
     };
@@ -229,9 +229,9 @@ export class PrintElementGenerator {
         const u = upPos(el);
         const arrow = this.arrowType(el, row);
         if (d >= 0) pushEdge('down', pos, d, el);
-        else if (arrow === Arrow.Down) arrows.push({ dir: 'down', lane: pos, color: this.edgeColor(el) });
+        else if (arrow === Arrow.Down) arrows.push({ dir: 'down', lane: pos, color: this.edgeColor(el), line: 0 });
         if (u >= 0) pushEdge('up', pos, u, el);
-        else if (arrow === Arrow.Up) arrows.push({ dir: 'up', lane: pos, color: this.edgeColor(el) });
+        else if (arrow === Arrow.Up) arrows.push({ dir: 'up', lane: pos, color: this.edgeColor(el), line: 0 });
       }
     }
 
@@ -239,6 +239,7 @@ export class PrintElementGenerator {
       commitIndex: g.rowCommit[row],
       nodeLane,
       nodeColor: this.colors.nodeColor(g.rowCommit[row]),
+      nodeLine: 0, // TODO(graph-engine)
       laneCount: maxLane + 1,
       edges,
       arrows,

@@ -110,6 +110,7 @@ export function toLogFilter(ui: FilterUi): LogFilter {
     users: ui.users && ui.users.length ? ui.users : null,
     date: ui.date && (ui.date.since != null || ui.date.until != null) ? ui.date : null,
     paths: ui.paths && ui.paths.length ? ui.paths : null,
+    revRange: null, // TODO(ui-ops): branch compare chip
   };
 }
 

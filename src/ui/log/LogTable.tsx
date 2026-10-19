@@ -14,6 +14,9 @@ import { useMetrics } from './density';
 import { badgeOf } from './palette';
 import { buildRefLabels, refsByIndex, type RefLabel } from './refLabels';
 import { t } from '../../i18n';
+import { WorkingTreeRow } from '../commit/WorkingTreeRow';
+import { useWorkingRowVisible } from '../commit/commitStore';
+import { commitMenuItems } from '../ops/menus';
 
 interface RowProps {
   row: number;
@@ -25,10 +28,12 @@ interface RowProps {
   sig: SignatureInfo | undefined;
   selected: boolean;
   focused: boolean;
+  /** Highlighted branch line id (GraphLayout line), -1 = none. GraphCell dims everything else. */
+  highlightLine: number;
   onContext: (e: React.MouseEvent, row: number) => void;
 }
 
-const Row = memo(function Row({ row, top, rowH, graph, meta, labels, sig, selected, focused, onContext }: RowProps) {
+const Row = memo(function Row({ row, top, rowH, graph, meta, labels, sig, selected, focused, highlightLine, onContext }: RowProps) {
   const merge = (meta?.parentCount ?? 0) > 1;
   const badge = badgeOf(graph.nodeColor);
   return (
@@ -39,7 +44,7 @@ const Row = memo(function Row({ row, top, rowH, graph, meta, labels, sig, select
       onContextMenu={(e) => onContext(e, row)}
     >
       <div className="cell subject-cell">
-        <GraphCell row={graph} selected={selected} />
+        <GraphCell row={graph} selected={selected} highlightLine={highlightLine} />
         <span className="subject" title={meta?.subject}>{meta ? meta.subject : ''}</span>
         {labels && labels.length > 0 && (
           <span className="badges">
@@ -88,6 +93,11 @@ export function LogTable() {
   const parentRef = useRef<HTMLDivElement>(null);
   const ROW_H = useMetrics().rowH;
   const ctx = useContextMenu();
+  const highlightKey = useRepo((s) => s.highlightKey);
+  const highlightLine = layout && highlightKey ? layout.lineOfKey(highlightKey) : -1;
+  // "Uncommitted changes (N)" row sits above the virtual rows; the virtualizer offsets by it.
+  const workingVisible = useWorkingRowVisible(store.commit);
+  const scrollMargin = workingVisible ? ROW_H : 0;
 
   const rowCount = layout?.rowCount ?? 0;
   const virtualizer = useVirtualizer({
@@ -95,6 +105,7 @@ export function LogTable() {
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_H,
     overscan: 20,
+    scrollMargin,
   });
   const items = virtualizer.getVirtualItems();
 
@@ -173,11 +184,16 @@ export function LogTable() {
     const ci = layout.commitIndexAt(row);
     if (!selection.set.has(ci)) selectRowAt(row, { shift: false, toggle: false });
     const hash = snapshot.hashes[ci];
+    // Selected commits in row order (newest first); a right-click outside the selection selected just that row.
+    const sel = selection.set.has(ci) ? [...selection.set] : [ci];
+    const hashes = sel.filter((i) => layout.rowOf(i) >= 0).sort((a, b) => layout.rowOf(a) - layout.rowOf(b)).map((i) => snapshot.hashes[i]);
+    const extra = commitMenuItems({ store, hashes, focusHash: hash });
     ctx.open(e, [
       { label: t('log.copyHash'), onClick: () => void navigator.clipboard?.writeText(hash) },
       { separator: true },
       { label: t('log.checkoutRev'), onClick: () => checkoutCommit(hash) },
       { label: t('log.newBranchHere'), onClick: () => openDialog({ kind: 'createBranch', startPoint: hash, startLabel: hash.slice(0, 10) }) },
+      ...(extra.length ? [{ separator: true } as const, ...extra] : []),
     ]);
   };
 
@@ -196,6 +212,7 @@ export function LogTable() {
     <div className="log-table">
       {loading && <div className="loading-bar" />}
       <div className="log-scroll" ref={parentRef} tabIndex={0} onKeyDown={onKeyDown} onMouseDown={onRowClick}>
+        {workingVisible && <WorkingTreeRow height={ROW_H} />}
         {!layout ? (
           <div className="empty-note">{loading ? t('common.loading') : ''}</div>
         ) : rowCount === 0 ? (
@@ -210,7 +227,7 @@ export function LogTable() {
                 <Row
                   key={v.key}
                   row={v.index}
-                  top={v.start}
+                  top={v.start - scrollMargin}
                   rowH={ROW_H}
                   graph={g}
                   meta={getMeta(ci)}
@@ -218,6 +235,7 @@ export function LogTable() {
                   sig={hash ? getSignature(hash) : undefined}
                   selected={selection.set.has(ci)}
                   focused={focusRow === v.index}
+                  highlightLine={highlightLine}
                   onContext={onContext}
                 />
               );

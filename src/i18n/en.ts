@@ -1,12 +1,16 @@
-import type { Entry, Key, Params } from './ko';
+import type { Entry, Key, Params, koBase } from './ko';
+import { appEn } from './parts/app.en';
+import { commitEn } from './parts/commit.en';
+import { graphEn } from './parts/graph.en';
+import { opsEn } from './parts/ops.en';
+import { quickEn } from './parts/quick.en';
 
 const n = (v: string | number): string => Number(v).toLocaleString('en-US');
 /** "1 file" / "2 files". */
 const pl = (v: string | number, one: string, many = one + 's'): string => `${n(v)} ${Number(v) === 1 ? one : many}`;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** English dictionary. Typed against ko's key set: a missing or extra key is a compile error. */
-export const en: Record<Key, Entry> = {
+const base: Record<keyof typeof koBase, Entry> = {
   'common.cancel': 'Cancel',
   'common.checkout': 'Checkout',
   'common.delete': 'Delete',
@@ -263,3 +267,6 @@ export const en: Record<Key, Entry> = {
   'fp.hint': '↑↓ move · Enter open · Esc close',
   'fp.count': (p: Params) => pl(p.n, 'file'),
 };
+
+/** English dictionary. Typed against ko's key set: a missing or extra key is a compile error. */
+export const en: Record<Key, Entry> = { ...base, ...commitEn, ...opsEn, ...appEn, ...graphEn, ...quickEn };

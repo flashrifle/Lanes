@@ -39,6 +39,11 @@ export async function call<K extends CommandName>(
   }
 }
 
+/** Generic typed event subscription; all v0.1 events (settings-changed, update-progress, menu-action, ...) go through it. */
+export function onEvent<T>(name: string, cb: (payload: T) => void): Promise<UnlistenFn> {
+  return listen<T>(name, (ev) => cb(ev.payload));
+}
+
 export function onRepoChanged(cb: (e: RepoChangedEvent) => void): Promise<UnlistenFn> {
   return listen<RepoChangedEvent>(EVENT_REPO_CHANGED, (ev) => cb(ev.payload));
 }

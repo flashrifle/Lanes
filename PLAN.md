@@ -113,3 +113,6 @@ Tests in `src/graph/__tests__/*.test.ts`: linear, branch+merge diamond, octopus,
 
 ## Risks
 Bek port difficulty (ship `normal` first; invariant test catches drawing bugs) · 100k IPC/memory (default limit 200k + truncated banner if > 3 s) · JS vs Rust regex syntax (tooltip; invalidArgument → red outline) · GUI PATH/credentials (explicit git paths, GIT_TERMINAL_PROMPT=0, null stdin) · watcher feedback loops (GIT_OPTIONAL_LOCKS=0, ignore index/objects/locks) · snapshot eviction (reload once) · contract drift (frozen types.ts + fixture key test).
+
+## v0.1 (current)
+See [docs/PLAN-v0.1.md](docs/PLAN-v0.1.md): contract additions, file ownership, milestones and release checklist for v0.1.0.

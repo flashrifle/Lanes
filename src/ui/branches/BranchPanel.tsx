@@ -7,6 +7,7 @@ import { useRepo, useRepoStore } from '../state/repoContext';
 import { colorOf, MUTED_LINE } from '../log/palette';
 import { allGroupIds, buildBranchTree, flattenTree, type FlatRow } from './branchTree';
 import { t } from '../../i18n';
+import { branchMenuItems } from '../ops/menus';
 
 const TAG_COLOR = '#F2B84B';
 const sectionTip = (g: string): string | undefined => (g === 'local' ? t('branches.tipLocal') : g === 'remote' ? t('branches.tipRemote') : g === 'tags' ? t('branches.tipTags') : undefined);
@@ -73,6 +74,7 @@ export function BranchPanel() {
       { label: ref.isFavorite ? t('branches.unfavorite') : t('branches.favorite'), disabled: isHead || ref.type === 'tag', onClick: () => void toggleFavorite(ref) },
       { separator: true },
       { label: t('common.delete'), disabled: ref.type !== 'localBranch' || ref.isCurrent, onClick: () => deleteBranch(ref.name) },
+      ...((extra) => (extra.length ? [{ separator: true } as const, ...extra] : []))(branchMenuItems(ref, store)),
     ]);
   };
 
