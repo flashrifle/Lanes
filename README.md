@@ -2,6 +2,10 @@
 
 # Lanes
 
+**[홈페이지](https://flashrifle.github.io/Lanes/)** · [다운로드](https://github.com/flashrifle/Lanes/releases/latest) · [후원](https://github.com/sponsors/flashrifle)
+
+<p align="center"><img src="site/assets/screens/ko/main.png" width="900" alt="Lanes 메인 창"></p>
+
 IDE에 들어 있는 Git 로그 창을 따로 떼어 낸 듯한, 빠르고 가벼운 macOS용 독립 실행형 Git 클라이언트입니다.
 IDE를 열지 않고도 커밋 그래프, 브랜치 트리, 필터, 파일 히스토리, blame을 그대로 쓸 수 있고,
 커밋·스테이징·push·merge·rebase 같은 일상 작업도 Lanes 안에서 끝낼 수 있습니다.
